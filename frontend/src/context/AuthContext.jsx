@@ -9,13 +9,13 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const token = localStorage.getItem('access_token');
+            const token = sessionStorage.getItem('access_token');
             if (token) {
                 try {
                     const { data } = await api.get('/users/me/');
                     setUser(data);
                 } catch (err) {
-                    localStorage.clear();
+                    sessionStorage.clear();
                 }
             }
             setLoading(false);
@@ -25,8 +25,8 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (username, password) => {
         const { data } = await api.post('/auth/token/', { username, password });
-        localStorage.setItem('access_token', data.access);
-        localStorage.setItem('refresh_token', data.refresh);
+        sessionStorage.setItem('access_token', data.access);
+        sessionStorage.setItem('refresh_token', data.refresh);
 
         // Fetch profile to get role
         const profile = await api.get('/users/me/');
@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        localStorage.clear();
+        sessionStorage.clear();
         setUser(null);
         window.location.href = '/login';
     };

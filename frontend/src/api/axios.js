@@ -8,7 +8,7 @@ const api = axios.create({
 
 // Add Interceptor for JWT
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
@@ -22,7 +22,7 @@ api.interceptors.response.use(
         const originalRequest = error.config;
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
-            const refreshToken = localStorage.getItem('refresh_token');
+            const refreshToken = sessionStorage.getItem('refresh_token');
             if (refreshToken) {
                 try {
                     // Use the extracted BASE_URL, removing trailing slash if needed for specific endpoints or assuming specific structure
@@ -30,10 +30,10 @@ api.interceptors.response.use(
                     const { data } = await axios.post(`${BASE_URL}auth/token/refresh/`, {
                         refresh: refreshToken,
                     });
-                    localStorage.setItem('access_token', data.access);
+                    sessionStorage.setItem('access_token', data.access);
                     return api(originalRequest);
                 } catch (err) {
-                    localStorage.clear();
+                    sessionStorage.clear();
                     window.location.href = '/login';
                 }
             }

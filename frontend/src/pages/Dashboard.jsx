@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    Users, Activity, TrendingUp, Package, Clock, 
-    ChevronRight, RefreshCw, Calendar, DollarSign, 
+import {
+    Users, Activity, TrendingUp, Package, Clock,
+    ChevronRight, RefreshCw, Calendar, DollarSign,
     ArrowUpRight, ArrowDownRight, Stethoscope, Wallet
 } from 'lucide-react';
-import { 
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -15,7 +15,7 @@ import { motion } from 'framer-motion';
 // --- Premium Stat Card ---
 const StatCard = ({ label, value, change, icon: Icon, color, trend }) => {
     const isPositive = trend === 'up';
-    
+
     const colorMap = {
         blue: { bg: 'bg-blue-50', text: 'text-blue-600', iconBg: 'bg-blue-600' },
         emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', iconBg: 'bg-emerald-600' },
@@ -26,7 +26,7 @@ const StatCard = ({ label, value, change, icon: Icon, color, trend }) => {
     const theme = colorMap[color] || colorMap.blue;
 
     return (
-        <motion.div 
+        <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             whileHover={{ y: -5 }}
@@ -34,7 +34,7 @@ const StatCard = ({ label, value, change, icon: Icon, color, trend }) => {
         >
             {/* Background Decor */}
             <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full ${theme.bg} opacity-50 group-hover:scale-125 transition-transform duration-500`} />
-            
+
             <div className="relative z-10">
                 <div className="flex justify-between items-start mb-4">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${theme.bg} ${theme.text}`}>
@@ -98,12 +98,12 @@ const Dashboard = () => {
                 value: item.amount
             }));
         }
-        
+
         // Fallback Data for UI (Last 7 Days)
         const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        return days.map((day, i) => ({
+        return days.map(day => ({
             name: day,
-            value: [4500, 3200, 5800, 4900, 6200, 7100, 5500][i] // Realistic variance
+            value: 0
         }));
     }, [stats]);
 
@@ -118,7 +118,7 @@ const Dashboard = () => {
 
     return (
         <div className="p-8 min-h-screen bg-[#F8FAFC] font-sans text-slate-900">
-            
+
             {/* --- Header Section --- */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
                 <div>
@@ -144,32 +144,32 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <StatCard
                     label="New Patients"
-                    value={stats?.patients_today || 12} // Fallback for UI demo
-                    change="+12%"
-                    trend="up"
+                    value={stats?.patients_today ?? 0}
+                    change={stats?.patients_change ? `${stats.patients_change}%` : null}
+                    trend={stats?.patients_change >= 0 ? 'up' : 'down'}
                     icon={Users}
                     color="blue"
                 />
                 <StatCard
                     label="Active Visits"
-                    value={stats?.active_visits || 5}
-                    change="+5%"
+                    value={stats?.active_visits ?? 0}
+                    change={null}
                     trend="up"
                     icon={Activity}
                     color="amber"
                 />
                 <StatCard
                     label="Today's Revenue"
-                    value={`₹${(stats?.revenue_today || 45200).toLocaleString()}`}
-                    change="+8.2%"
-                    trend="up"
+                    value={`₹${(stats?.revenue_today ?? 0).toLocaleString()}`}
+                    change={stats?.revenue_change ? `${stats.revenue_change}%` : null}
+                    trend={stats?.revenue_change >= 0 ? 'up' : 'down'}
                     icon={Wallet}
                     color="emerald"
                 />
                 <StatCard
                     label="Low Stock Items"
-                    value={stats?.pharmacy_low_stock || 3}
-                    change="-2"
+                    value={stats?.pharmacy_low_stock ?? 0}
+                    change={null}
                     trend="down"
                     icon={Package}
                     color="rose"
@@ -178,9 +178,9 @@ const Dashboard = () => {
 
             {/* --- Charts & Feeds --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                
+
                 {/* 1. Revenue Analytics Chart */}
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
@@ -198,43 +198,43 @@ const Dashboard = () => {
                             <RefreshCw size={18} />
                         </button>
                     </div>
-                    
+
                     <div className="h-80 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={processedChartData}>
                                 <defs>
                                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#2563EB" stopOpacity={0.4}/>
-                                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
+                                        <stop offset="5%" stopColor="#2563EB" stopOpacity={0.4} />
+                                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis 
-                                    dataKey="name" 
-                                    axisLine={false} 
-                                    tickLine={false} 
-                                    tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 'bold'}} 
+                                <XAxis
+                                    dataKey="name"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }}
                                     dy={10}
                                 />
-                                <YAxis 
-                                    axisLine={false} 
-                                    tickLine={false} 
-                                    tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 'bold'}}
-                                    tickFormatter={(val) => `₹${val/1000}k`} 
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }}
+                                    tickFormatter={(val) => `₹${val / 1000}k`}
                                 />
-                                <Tooltip 
+                                <Tooltip
                                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '16px', fontFamily: 'sans-serif' }}
                                     itemStyle={{ color: '#0f172a', fontWeight: 'bold', fontSize: '14px' }}
                                     labelStyle={{ color: '#64748b', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px', fontWeight: 'bold' }}
                                     formatter={(val) => [`₹${val.toLocaleString()}`, 'Revenue']}
                                 />
-                                <Area 
-                                    type="monotone" 
-                                    dataKey="value" 
-                                    stroke="#2563EB" 
-                                    strokeWidth={4} 
-                                    fillOpacity={1} 
-                                    fill="url(#colorRevenue)" 
+                                <Area
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#2563EB"
+                                    strokeWidth={4}
+                                    fillOpacity={1}
+                                    fill="url(#colorRevenue)"
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -242,7 +242,7 @@ const Dashboard = () => {
                 </motion.div>
 
                 {/* 2. Recent Activity Feed */}
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
@@ -258,7 +258,7 @@ const Dashboard = () => {
                             <span className="text-[10px] font-bold uppercase tracking-wide">Live</span>
                         </div>
                     </div>
-                    
+
                     <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[400px]">
                         {(stats?.recent_visits || []).length > 0 ? (
                             stats.recent_visits.slice(0, 6).map((visit) => (
@@ -275,11 +275,10 @@ const Dashboard = () => {
                                             </p>
                                         </div>
                                     </div>
-                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border ${
-                                        visit.status === 'OPEN' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border ${visit.status === 'OPEN' ? 'bg-blue-50 text-blue-600 border-blue-100' :
                                         visit.status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                        'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                    }`}>
+                                            'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                        }`}>
                                         {visit.status?.replace('_', ' ')}
                                     </span>
                                 </div>
@@ -293,7 +292,7 @@ const Dashboard = () => {
                             </div>
                         )}
                     </div>
-                    
+
                     <div className="p-4 border-t border-slate-100 bg-slate-50/30">
                         <button className="w-full py-3 text-xs font-black text-slate-600 hover:text-blue-600 hover:bg-white rounded-xl transition-all uppercase tracking-widest flex items-center justify-center gap-2 border border-transparent hover:border-slate-200 hover:shadow-sm">
                             View All History <ChevronRight size={14} />
