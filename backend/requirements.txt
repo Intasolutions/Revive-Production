@@ -1,0 +1,11 @@
+Django>=5.0.0
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
+django-filter
+python-dotenv
+python-socketio
+daphne
+Pillow
+python-dateutil
+requests
