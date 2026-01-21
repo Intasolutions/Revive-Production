@@ -9,3 +9,4 @@ daphne
 Pillow
 python-dateutil
 requests
+gunicorn
