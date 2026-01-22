@@ -90,7 +90,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                 defaults={
                     'barcode': item.get('barcode', '') or '',
                     'mrp': item['mrp'],
-                    'selling_price': item['mrp'], # User Rule: Sell at MRP
+                    'selling_price': item.get('selling_price', item['mrp']), # Use explicit selling price if permitted, else MRP
                     'purchase_rate': item.get('purchase_rate', 0),
                     'qty_available': qty_in,
                     'tablets_per_strip': tps,
@@ -107,7 +107,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                 if item.get('barcode'):
                     stock.barcode = item['barcode']
                 stock.mrp = item['mrp']
-                stock.selling_price = item['mrp'] # User Rule: Sell at MRP
+                stock.selling_price = item.get('selling_price', item['mrp']) # Use explicit selling price
                 stock.purchase_rate = item.get('purchase_rate', stock.purchase_rate)
                 stock.hsn = item.get('hsn', stock.hsn)
                 stock.gst_percent = global_gst # Apply Global GST

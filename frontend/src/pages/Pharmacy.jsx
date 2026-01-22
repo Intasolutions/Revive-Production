@@ -252,11 +252,11 @@ const Pharmacy = () => {
             const { data } = await api.get(`pharmacy/stock/?search=${barcode}`);
             const existing = data.results?.[0];
             if (existing) {
-                const newItem = { product_name: existing.name, barcode: existing.barcode, batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: existing.purchase_rate || 0, ptr: existing.purchase_rate || 0, mrp: existing.mrp, manufacturer: existing.manufacturer, hsn: existing.hsn, tablets_per_strip: existing.tablets_per_strip || 10 };
+                const newItem = { product_name: existing.name, barcode: existing.barcode, batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: existing.purchase_rate || 0, ptr: existing.purchase_rate || 0, mrp: existing.mrp, manufacturer: existing.manufacturer, hsn: existing.hsn, tablets_per_strip: existing.tablets_per_strip || 10, selling_price_per_tab: (existing.mrp / (existing.tablets_per_strip || 1)).toFixed(2) };
                 setManualInvoice(prev => ({ ...prev, items: [...prev.items, newItem] }));
                 showToast('success', `Found: ${existing.name}`);
             } else {
-                setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode, batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10 }] }));
+                setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode, batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }));
                 showToast('info', 'New product. Enter details.');
             }
             setScannedBarcode('');
@@ -294,15 +294,19 @@ const Pharmacy = () => {
                     const qty = parseInt(item.qty) || 1;
                     const free = parseInt(item.free_qty) || 0;
                     const tps = parseInt(item.tablets_per_strip) || 1;
+                    const manualTabPrice = parseFloat(item.selling_price_per_tab) || 0;
+
                     return {
                         ...item,
-                        qty: qty * tps, // Convert to Tablets
+                        qty: qty * tps, // Convert to Tablets (Inventory is tracked in Tablets)
                         free_qty: free * tps, // Convert to Tablets
-                        // Rate/Strip entered. Total Cost = Rate * Qty.
-                        // Unit Cost = Total Cost / Total Tablets (Qty+Free * TPS)
-                        purchase_rate: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps)).toFixed(2)),
-                        ptr: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps)).toFixed(2)),
-                        mrp: parseFloat(((parseFloat(item.mrp) || 0) / tps).toFixed(2)), // Unit MRP = Strip MRP / TPS
+                        // FIX: Store Per STRIP prices (Backend expects Strip Price and divides by TPS for sales)
+                        // Effective Purchase Rate per Strip (factoring in free items)
+                        // Rate * Qty(Strips) / Total Strips (Qty+Free)
+                        purchase_rate: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / (qty + free)).toFixed(2)),
+                        ptr: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / (qty + free)).toFixed(2)),
+                        mrp: parseFloat((parseFloat(item.mrp) || 0).toFixed(2)), // Keep as Strip MRP
+                        selling_price: parseFloat((manualTabPrice * tps).toFixed(2)) // Convert Manual Tab Price -> Strip Price for backend
                     };
                 })
             };
@@ -814,7 +818,9 @@ const Pharmacy = () => {
                                                     <td className="px-4 py-3 text-right">
                                                         <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} /></div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right bg-blue-50/30 text-[10px] font-bold text-blue-600">₹{((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</td>
+                                                    <td className="px-4 py-3 text-right bg-blue-50/30">
+                                                        <div className="flex items-center justify-end font-bold text-blue-600 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner font-black" type="number" step="0.01" value={item.selling_price_per_tab || ((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)} onChange={(e) => handleManualItemChange(idx, 'selling_price_per_tab', e.target.value)} /></div>
+                                                    </td>
                                                     <td className="px-4 py-3 text-center"><button onClick={() => removeManualItem(idx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16} /></button></td>
                                                 </tr>
                                             ))}
@@ -836,7 +842,7 @@ const Pharmacy = () => {
                                                     </div>
                                                     <span>Invoice Value: ₹{Math.round((manualInvoice.items.reduce((acc, item) => acc + ((parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0)), 0) * (1 + (manualInvoice.gst_percent / 100)))).toFixed(2)}</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
+                                                <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
                                             </tr>
                                         </tfoot>
                                     </table>
