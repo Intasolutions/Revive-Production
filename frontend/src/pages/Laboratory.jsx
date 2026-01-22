@@ -18,7 +18,7 @@ import {
     FileText,
     Printer,
     Trash2,
-    MapPin, Phone, Microscope, Pencil
+    MapPin, Phone, Microscope, Pencil, AlertTriangle
 } from 'lucide-react';
 import { Card, Button, Input, Table } from '../components/UI';
 import Pagination from '../components/Pagination';
