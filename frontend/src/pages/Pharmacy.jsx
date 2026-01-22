@@ -137,9 +137,11 @@ const Pharmacy = () => {
     const [newSupplierName, setNewSupplierName] = useState('');
     const [showManualPurchaseModal, setShowManualPurchaseModal] = useState(false);
     const [manualInvoice, setManualInvoice] = useState({
-        supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [], gst_percent: 0
+        supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [], gst_percent: 0,
+        cash_discount: 0, courier_charge: 0 // New Extra Expenses
     });
     const [scannedBarcode, setScannedBarcode] = useState('');
+    const [manualProductSearch, setManualProductSearch] = useState({ rowIdx: null, results: [] });
 
     // --- FETCH FUNCTIONS ---
     const fetchStock = useCallback(async (showLoading = true) => {
@@ -202,7 +204,7 @@ const Pharmacy = () => {
         else if (activeTab === 'pos') fetchPendingVisits();
     }, [activeTab, fetchStock, fetchRecentImports, fetchSuppliers, fetchPendingVisits]);
 
-    // --- LOGIC (Simplified for display, keeping original functionality) ---
+    // --- LOGIC (Restored) ---
     const searchPatients = async (q) => {
         setPatientSearch(q);
         if (q.length < 2) { setPatients([]); return; }
@@ -247,23 +249,105 @@ const Pharmacy = () => {
         }
         setMedSearch(''); setMedResults([]);
     };
+
+    // --- FETCH FUNCTIONS (Manual) ---
+    const searchProductsForManual = async (query, rowIdx) => {
+        if (!query || query.length < 2) {
+            setManualProductSearch({ rowIdx: null, results: [] });
+            return;
+        }
+        try {
+            const { data } = await api.get(`pharmacy/stock/?search=${query}`);
+            setManualProductSearch({ rowIdx, results: data.results || data || [] });
+        } catch (err) {
+            setManualProductSearch({ rowIdx: null, results: [] });
+        }
+    };
+
+    const selectProductForManualRow = (rowIdx, product) => {
+        const newItems = [...manualInvoice.items];
+        newItems[rowIdx] = {
+            ...newItems[rowIdx],
+            product_name: product.name,
+            hsn: product.hsn || '',
+            manufacturer: product.manufacturer || '',
+            tablets_per_strip: product.tablets_per_strip || 1,
+            gst_percent: product.gst_percent || 0,
+            mrp: product.mrp || 0,
+            purchase_rate: product.purchase_rate || 0,
+            // Keep other fields valid
+            batch_no: newItems[rowIdx].batch_no,
+            expiry_date: newItems[rowIdx].expiry_date,
+            qty: newItems[rowIdx].qty,
+            free_qty: newItems[rowIdx].free_qty
+        };
+        setManualInvoice(prev => ({ ...prev, items: newItems }));
+        setManualProductSearch({ rowIdx: null, results: [] });
+    };
+
     const handleBarcodeStockIn = async (barcode) => {
         try {
             const { data } = await api.get(`pharmacy/stock/?search=${barcode}`);
             const existing = data.results?.[0];
             if (existing) {
-                const newItem = { product_name: existing.name, barcode: existing.barcode, batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: existing.purchase_rate || 0, ptr: existing.purchase_rate || 0, mrp: existing.mrp, manufacturer: existing.manufacturer, hsn: existing.hsn, tablets_per_strip: existing.tablets_per_strip || 10, selling_price_per_tab: (existing.mrp / (existing.tablets_per_strip || 1)).toFixed(2) };
+                // Found existing product
+                const newItem = {
+                    product_name: existing.name,
+                    barcode: existing.barcode,
+                    batch_no: '',
+                    expiry_date: '',
+                    qty: 1,
+                    free_qty: 0,
+                    purchase_rate: existing.purchase_rate || 0,
+                    ptr: existing.purchase_rate || 0,
+                    mrp: existing.mrp,
+                    gst_percent: existing.gst_percent || 0, // Auto-fill GST
+                    manufacturer: existing.manufacturer,
+                    hsn: existing.hsn,
+                    tablets_per_strip: existing.tablets_per_strip || 10,
+                    selling_price_per_tab: (existing.mrp / (existing.tablets_per_strip || 1)).toFixed(2)
+                };
                 setManualInvoice(prev => ({ ...prev, items: [...prev.items, newItem] }));
                 showToast('success', `Found: ${existing.name}`);
             } else {
-                setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode, batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }));
+                // New product template
+                setManualInvoice(prev => ({
+                    ...prev, items: [...prev.items, {
+                        product_name: '',
+                        barcode,
+                        batch_no: '',
+                        expiry_date: '',
+                        qty: 1,
+                        free_qty: 0,
+                        purchase_rate: 0,
+                        ptr: 0,
+                        mrp: 0,
+                        gst_percent: 0,
+                        manufacturer: '',
+                        hsn: '',
+                        tablets_per_strip: 10,
+                        selling_price_per_tab: 0
+                    }]
+                }));
                 showToast('info', 'New product. Enter details.');
             }
             setScannedBarcode('');
-        } catch (err) { console.error("Barcode lookup failed", err); }
+        } catch (err) {
+            console.error("Barcode lookup failed", err);
+            showToast('error', 'Scan failed');
+        }
     };
+
     const handleManualItemChange = (idx, field, value) => {
-        const newItems = [...manualInvoice.items]; newItems[idx][field] = value; setManualInvoice(prev => ({ ...prev, items: newItems }));
+        const newItems = [...manualInvoice.items];
+        newItems[idx][field] = value;
+
+        // Live search if typing in product name
+        if (field === 'product_name') {
+            searchProductsForManual(value, idx);
+        }
+
+        setManualInvoice(prev => ({ ...prev, items: newItems }));
     };
     const removeManualItem = (idx) => { setManualInvoice(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); };
     const submitManualPurchase = async () => {
@@ -403,6 +487,26 @@ const Pharmacy = () => {
     const handleConfirmUpload = async () => { if (!fileToUpload || !selectedSupplier) return; const formData = new FormData(); formData.append('file', fileToUpload); formData.append('supplier_name', selectedSupplier); setUploadLoading(true); try { const { data } = await api.post('pharmacy/bulk-upload/', formData, { headers: { 'Content-Type': 'multipart/form-data' } }); setUploadResult({ success: true, message: 'Upload Successful', details: `${data.items_processed} items processed.`, invoice: data.invoice_no }); showToast('success', 'Inventory updated'); if (activeTab === 'purchases') fetchRecentImports(); setFileToUpload(null); } catch (err) { showToast('error', 'Upload failed.'); setUploadResult({ success: false, message: 'Upload Failed', details: err.response?.data?.error || "Error uploading file." }); } finally { setUploadLoading(false); } };
     const handleSyncToTablets = async (item) => { if (!window.confirm(`This will multiply current stock (${item.qty_available}) by ${item.tablets_per_strip} to convert existing strip counts to tablets. Continue?`)) return; try { const newQty = item.qty_available * item.tablets_per_strip; await api.patch(`pharmacy/stock/${item.med_id || item.id}/`, { qty_available: newQty }); showToast('success', 'Stock corrected to tablets'); fetchStock(); setSelectedStockItem(null); } catch (err) { showToast('error', 'Update failed'); } };
     const handleAddSupplier = async (e) => { e.preventDefault(); try { await api.post('pharmacy/suppliers/', { supplier_name: newSupplierName }); fetchSuppliers(); setShowAddSupplierModal(false); setNewSupplierName(''); showToast('success', 'Supplier added'); } catch (err) { showToast('error', 'Failed to add supplier'); } };
+
+    // Update Invoice Extras (Cash Discount, Courier)
+    const updateInvoiceExtras = async (field, value) => {
+        if (!selectedImport) return;
+        try {
+            const updatedData = { ...selectedImport, [field]: parseFloat(value) || 0 };
+            // Optimistic update
+            setSelectedImport(updatedData);
+
+            const { data } = await api.patch(`pharmacy/purchases/${selectedImport.purchase_id || selectedImport.id}/`, {
+                [field]: parseFloat(value) || 0
+            });
+            // Update with response (recalculated total from backend)
+            setSelectedImport(prev => ({ ...prev, ...data }));
+            fetchRecentImports(); // Refresh list
+        } catch (err) {
+            console.error(err);
+            showToast('error', 'Failed to update invoice');
+        }
+    };
 
     return (
         <div className="p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen bg-[#F8FAFC] font-sans text-slate-900 flex flex-col overflow-hidden">
@@ -719,7 +823,7 @@ const Pharmacy = () => {
                 {selectedImport && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 no-print">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedImport(null)} />
-                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-white w-full max-w-4xl rounded-[2rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[85vh]">
+                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-white w-full max-w-[90vw] rounded-[2rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
                             <div className="p-8 bg-slate-50 border-b border-slate-100">
                                 <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-black text-slate-900">Invoice #{selectedImport.invoice_no || '---'}</h2><p className="text-sm font-bold text-slate-400">Imported on {new Date(selectedImport.created_at).toLocaleDateString()}</p></div><button onClick={() => setSelectedImport(null)} className="p-2 bg-white rounded-full hover:text-red-500 shadow-sm"><X size={20} /></button></div>
                                 <div className="grid grid-cols-3 gap-4">
@@ -730,10 +834,88 @@ const Pharmacy = () => {
                             </div>
                             <div className="flex-1 overflow-auto p-0">
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="bg-white sticky top-0 shadow-sm"><tr>{['Product', 'Batch', 'Exp', 'HSN', 'Qty', 'MRP', 'PTR', 'Amount'].map(h => <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">{h}</th>)}</tr></thead>
-                                    <tbody className="divide-y divide-slate-50">{selectedImport.items_detail?.map((item, idx) => (
-                                        <tr key={idx} className="hover:bg-slate-50 transition-colors"><td className="px-6 py-3 font-bold text-sm text-slate-900">{item.product_name}</td><td className="px-6 py-3 font-mono text-xs text-slate-600">{item.batch_no}</td><td className="px-6 py-3 font-mono text-xs text-slate-600">{item.expiry_date}</td><td className="px-6 py-3 font-mono text-xs text-slate-600">{item.hsn || '-'}</td><td className="px-6 py-3 font-bold text-emerald-600">{item.qty} {item.free_qty > 0 && <span className="text-xs text-emerald-400">+ {item.free_qty} Free</span>}</td><td className="px-6 py-3 text-sm text-slate-600">₹{item.mrp}</td><td className="px-6 py-3 text-sm text-slate-600">₹{item.ptr}</td><td className="px-6 py-3 font-black text-slate-900">₹{((item.ptr || 0) * item.qty).toFixed(2)}</td></tr>
-                                    ))}</tbody>
+                                    <thead className="bg-white sticky top-0 shadow-sm">
+                                        <tr>
+                                            {['Product', 'Mfg', 'Batch', 'Exp', 'Pack', 'HSN', 'Qty', 'Free', 'MRP', 'PTR', 'Disc%', 'TaxPerc', 'Amount'].map(h => (
+                                                <th key={h} className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 whitespace-nowrap">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {selectedImport.items_detail?.map((item, idx) => {
+                                            const baseAmount = (item.ptr || 0) * item.qty;
+                                            const discountAmount = baseAmount * ((item.discount_percent || 0) / 100);
+                                            const taxableAmount = baseAmount - discountAmount;
+                                            const gstAmount = taxableAmount * ((item.gst_percent || 0) / 100);
+                                            const totalItemAmount = taxableAmount + gstAmount;
+
+                                            return (
+                                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-4 py-3 font-bold text-sm text-slate-900 max-w-[200px] truncate" title={item.product_name}>{item.product_name}</td>
+                                                    <td className="px-4 py-3 text-xs text-slate-500 max-w-[100px] truncate" title={item.manufacturer}>{item.manufacturer || '-'}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{item.batch_no}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{item.expiry_date}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 text-center">{item.tablets_per_strip || 1}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{item.hsn || '-'}</td>
+                                                    <td className="px-4 py-3 font-bold text-emerald-600">{item.qty}</td>
+                                                    <td className="px-4 py-3 font-medium text-emerald-500">{item.free_qty > 0 ? `+${item.free_qty}` : '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">₹{item.mrp}</td>
+                                                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">₹{item.ptr}</td>
+                                                    <td className="px-4 py-3 text-sm text-rose-500 font-bold whitespace-nowrap text-center">{item.discount_percent > 0 ? `${item.discount_percent}%` : '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-blue-600 font-bold whitespace-nowrap text-center">{item.gst_percent || 0}%</td>
+                                                    <td className="px-4 py-3 font-black text-slate-900 whitespace-nowrap">₹{taxableAmount.toFixed(2)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                    <tfoot className="bg-slate-50 border-t-2 border-slate-100">
+                                        {/* Subtotal */}
+                                        <tr>
+                                            <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item Total (Taxable + GST)</td>
+                                            <td colSpan="2" className="px-4 py-2 text-right text-sm font-bold text-slate-600">
+                                                ₹{selectedImport.items_detail?.reduce((acc, item) => {
+                                                    const taxable = ((item.ptr || 0) * item.qty) - (((item.ptr || 0) * item.qty) * ((item.discount_percent || 0) / 100));
+                                                    const gst = taxable * ((item.gst_percent || 0) / 100);
+                                                    return acc + taxable + gst;
+                                                }, 0).toFixed(2)}
+                                            </td>
+                                        </tr>
+                                        {/* Cash Discount */}
+                                        <tr>
+                                            <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Less: Cash Discount</td>
+                                            <td colSpan="2" className="px-4 py-2 text-right">
+                                                <input
+                                                    type="number"
+                                                    placeholder="0"
+                                                    value={selectedImport.cash_discount || ''}
+                                                    onChange={(e) => updateInvoiceExtras('cash_discount', e.target.value)}
+                                                    className="w-24 text-right bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500"
+                                                />
+                                            </td>
+                                        </tr>
+                                        {/* Courier Charge */}
+                                        <tr>
+                                            <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Add: Courier Charge</td>
+                                            <td colSpan="2" className="px-4 py-2 text-right">
+                                                <input
+                                                    type="number"
+                                                    placeholder="0"
+                                                    value={selectedImport.courier_charge || ''}
+                                                    onChange={(e) => updateInvoiceExtras('courier_charge', e.target.value)}
+                                                    className="w-24 text-right bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500"
+                                                />
+                                            </td>
+                                        </tr>
+                                        {/* Grand Total */}
+                                        <tr className="bg-slate-100">
+                                            <td colSpan="11" className="px-4 py-4 text-right text-xs font-black text-slate-900 uppercase tracking-widest">Grand Total</td>
+                                            <td colSpan="2" className="px-4 py-4 text-right">
+                                                <div className="text-xl font-black text-blue-600">
+                                                    ₹{selectedImport.total_amount || 0}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             </div>
                         </motion.div>
@@ -782,67 +964,89 @@ const Pharmacy = () => {
                                     <table className="w-full text-left min-w-[1000px]">
                                         <thead className="bg-slate-50 border-b border-slate-100">
                                             <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                <th className="px-4 py-4 w-[200px]">Product Name</th>
-                                                <th className="px-4 py-4 w-[120px]">Batch</th>
-                                                <th className="px-4 py-4 w-[130px]">Expiry</th>
-                                                <th className="px-4 py-4 w-[80px]">HSN</th>
-                                                <th className="px-4 py-4 w-[80px]">TPS</th>
-                                                <th className="px-4 py-4 w-[80px]">Qty(Str)</th>
-                                                <th className="px-4 py-4 w-[80px]">Free</th>
-                                                <th className="px-4 py-4 bg-blue-50/50 w-[100px]">Total(Tab)</th>
-                                                <th className="px-4 py-4 text-right w-[100px]">Rate / Strip</th>
-                                                <th className="px-4 py-4 text-right w-[100px]">MRP / Strip</th>
-                                                <th className="px-4 py-4 text-right bg-blue-50/50 w-[100px]">MRP (Tab)</th>
-                                                <th className="px-4 py-4 text-center w-[60px]">Action</th>
+                                                <th className="px-3 py-4 w-[180px]">Product Name</th>
+                                                <th className="px-3 py-4 w-[100px]">Batch</th>
+                                                <th className="px-3 py-4 w-[110px]">Expiry</th>
+                                                <th className="px-3 py-4 w-[70px]">HSN</th>
+                                                <th className="px-3 py-4 w-[60px]">TPS</th>
+                                                <th className="px-3 py-4 w-[60px]">Qty(Str)</th>
+                                                <th className="px-3 py-4 w-[60px]">Free</th>
+                                                <th className="px-3 py-4 bg-blue-50/50 w-[80px]">Total(Tab)</th>
+                                                <th className="px-3 py-4 text-right w-[90px]">Rate</th>
+                                                <th className="px-3 py-4 text-center w-[60px]">GST%</th>
+                                                <th className="px-3 py-4 text-right w-[90px]">MRP</th>
+                                                <th className="px-3 py-4 text-right bg-blue-50/50 w-[90px]">MRP(Tab)</th>
+                                                <th className="px-3 py-4 text-center w-[50px]">Act</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
                                             {manualInvoice.items.map((item, idx) => (
-                                                <tr key={idx} className="group hover:bg-slate-50/50">
-                                                    <td className="px-4 py-3"><input className="w-full bg-transparent border-none text-xs font-bold text-slate-900 outline-none p-0" placeholder="Med name..." value={item.product_name} onChange={(e) => handleManualItemChange(idx, 'product_name', e.target.value)} /></td>
-                                                    <td className="px-4 py-3">
+                                                <tr key={idx} className="group hover:bg-slate-50/50 relative">
+                                                    <td className="px-3 py-3 relative">
+                                                        <input
+                                                            className="w-full bg-transparent border-none text-xs font-bold text-slate-900 outline-none p-0 focus:text-blue-600"
+                                                            placeholder="Med name..."
+                                                            value={item.product_name}
+                                                            onChange={(e) => handleManualItemChange(idx, 'product_name', e.target.value)}
+                                                            onFocus={() => { if (item.product_name.length >= 2) searchProductsForManual(item.product_name, idx); }}
+                                                        />
+                                                        {manualProductSearch.rowIdx === idx && manualProductSearch.results.length > 0 && (
+                                                            <div className="absolute top-full left-0 z-[100] w-[300px] bg-white rounded-xl shadow-2xl border border-slate-100 max-h-48 overflow-y-auto mt-2">
+                                                                {manualProductSearch.results.map(res => (
+                                                                    <div key={res.id || res.med_id} onClick={() => selectProductForManualRow(idx, res)} className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0">
+                                                                        <p className="text-xs font-bold text-slate-900">{res.name}</p>
+                                                                        <div className="flex justify-between mt-1">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase">{res.manufacturer} • {res.supplier_name || 'No Supplier'}</span>
+                                                                            <span className="text-[10px] font-black text-emerald-600">{res.qty_available} Stock</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                                <div className="p-2 bg-slate-50 text-[10px] font-bold text-center text-blue-600 cursor-pointer hover:bg-slate-100" onClick={() => setManualProductSearch({ rowIdx: null, results: [] })}>
+                                                                    + Create New "{item.product_name}"
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-3 py-3">
                                                         <input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="BATCH" value={item.batch_no} onChange={(e) => handleManualItemChange(idx, 'batch_no', e.target.value)} />
                                                     </td>
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-3 py-3">
                                                         <input className="w-full bg-transparent border-none text-[10px] text-slate-400 outline-none p-0" type="date" value={item.expiry_date} onChange={(e) => handleManualItemChange(idx, 'expiry_date', e.target.value)} />
                                                     </td>
-                                                    <td className="px-4 py-3"><input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="HSN" value={item.hsn} onChange={(e) => handleManualItemChange(idx, 'hsn', e.target.value)} /></td>
-                                                    <td className="px-4 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} /></td>
-                                                    <td className="px-4 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.qty} onChange={(e) => handleManualItemChange(idx, 'qty', e.target.value)} /></td>
-                                                    <td className="px-4 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} /></td>
-                                                    <td className="px-4 py-3 text-center bg-blue-50/30 text-xs font-black text-blue-600">{((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)}</td>
-                                                    <td className="px-4 py-3 text-right">
+                                                    <td className="px-3 py-3"><input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="HSN" value={item.hsn} onChange={(e) => handleManualItemChange(idx, 'hsn', e.target.value)} /></td>
+                                                    <td className="px-3 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} /></td>
+                                                    <td className="px-3 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.qty} onChange={(e) => handleManualItemChange(idx, 'qty', e.target.value)} /></td>
+                                                    <td className="px-3 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} /></td>
+                                                    <td className="px-3 py-3 text-center bg-blue-50/30 text-xs font-black text-blue-600">{((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)}</td>
+                                                    <td className="px-3 py-3 text-right">
                                                         <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner" type="number" step="0.01" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} /></div>
                                                         <span className="text-[9px] text-slate-400 block">@₹{((parseFloat(item.purchase_rate) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</span>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right">
+                                                    <td className="px-3 py-3 text-center">
+                                                        <input className="w-full bg-transparent border-dashed border-b border-slate-300 text-xs font-bold text-center text-blue-600 outline-none p-0 no-spinner focus:border-blue-500" type="number" placeholder="0%" value={item.gst_percent} onChange={(e) => handleManualItemChange(idx, 'gst_percent', e.target.value)} />
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right">
                                                         <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} /></div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right bg-blue-50/30">
+                                                    <td className="px-3 py-3 text-right bg-blue-50/30">
                                                         <div className="flex items-center justify-end font-bold text-blue-600 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner font-black" type="number" step="0.01" value={item.selling_price_per_tab || ((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)} onChange={(e) => handleManualItemChange(idx, 'selling_price_per_tab', e.target.value)} /></div>
                                                     </td>
-                                                    <td className="px-4 py-3 text-center"><button onClick={() => removeManualItem(idx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16} /></button></td>
+                                                    <td className="px-3 py-3 text-center"><button onClick={() => removeManualItem(idx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16} /></button></td>
                                                 </tr>
                                             ))}
-                                            {manualInvoice.items.length === 0 && (<tr><td colSpan="12" className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest bg-slate-50/50">Scan or add items to begin</td></tr>)}
+                                            {manualInvoice.items.length === 0 && (<tr><td colSpan="13" className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest bg-slate-50/50">Scan or add items to begin</td></tr>)}
                                         </tbody>
                                         <tfoot className="bg-slate-50 font-bold">
                                             <tr className="text-slate-900 text-xs">
-                                                <td colSpan="7" className="px-4 py-4">Total Items: {manualInvoice.items.length} | Total Tablets: {manualInvoice.items.reduce((acc, item) => acc + (((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)), 0)}</td>
+                                                <td colSpan="8" className="px-4 py-4">Total Items: {manualInvoice.items.length} | Total Tablets: {manualInvoice.items.reduce((acc, item) => acc + (((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)), 0)}</td>
                                                 <td colSpan="4" className="px-4 py-4 text-right flex items-center justify-end gap-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">GST</span>
-                                                        <select className="bg-slate-100 border-none rounded-lg text-xs font-bold text-slate-700 outline-none py-1 px-2" value={manualInvoice.gst_percent} onChange={(e) => setManualInvoice(prev => ({ ...prev, gst_percent: parseInt(e.target.value) || 0 }))}>
-                                                            <option value={0}>0%</option>
-                                                            <option value={5}>5%</option>
-                                                            <option value={12}>12%</option>
-                                                            <option value={18}>18%</option>
-                                                            <option value={28}>28%</option>
-                                                        </select>
-                                                    </div>
-                                                    <span>Invoice Value: ₹{Math.round((manualInvoice.items.reduce((acc, item) => acc + ((parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0)), 0) * (1 + (manualInvoice.gst_percent / 100)))).toFixed(2)}</span>
+                                                    <span>Invoice Value (Inc. Total GST): ₹{Math.round(manualInvoice.items.reduce((acc, item) => {
+                                                        const taxable = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
+                                                        const gst = taxable * ((parseFloat(item.gst_percent) || 0) / 100);
+                                                        return acc + taxable + gst;
+                                                    }, 0)).toFixed(2)}</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
+                                                <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, gst_percent: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
                                             </tr>
                                         </tfoot>
                                     </table>

@@ -93,11 +93,12 @@ class PharmacyBulkUploadView(APIView):
                     raw_data = dict(zip(headers, row))
                     data = {k.strip(): v for k, v in raw_data.items() if k}
                     
-                    # Helper to find key case-insensitively
+                    # Helper to find key case-insensitively, respecting priority order
                     def get_val(keys_list, default=''):
-                        for k in data.keys():
-                            if k.lower() in [x.lower() for x in keys_list]:
-                                return data[k]
+                        data_map = {k.lower(): v for k, v in data.items()}
+                        for k in keys_list:
+                            if k.lower() in data_map:
+                                return data_map[k.lower()]
                         return default
 
                     p_name = get_val(['Product Name', 'Item Name', 'Particulars'], 'Unknown')
@@ -137,7 +138,7 @@ class PharmacyBulkUploadView(APIView):
                     barcode = get_val(['Product Code', 'Barcode', 'Code'], '')
                     
                     # New: Tablets per strip
-                    strip_size_val = get_val(['Packing', 'ItemPerPack', 'Strip Size', 'Tablets per Strip', 'TPS', 'Unit'], 1)
+                    strip_size_val = get_val(['ItemPerPack', 'Packing', 'Strip Size', 'Tablets per Strip', 'TPS', 'Unit'], 1)
                     try:
                         # Extract number from packing like "10S" or "10 Tablets"
                         import re
@@ -153,7 +154,23 @@ class PharmacyBulkUploadView(APIView):
                     except:
                         exp_date = None
 
-                    # Create PurchaseItem
+                    for key in ['GST', 'GST%', 'Tax', 'Tax %', 'IGST', 'TaxPerc']:
+                        if key in data and data[key]:
+                            try:
+                                val_str = str(data[key]).replace('%', '').strip()
+                                gst_val = float(val_str)
+                                break
+                            except: pass
+
+                    for key in ['DiscountPerc', 'Discount %', 'Disc %', 'Discount', 'Disc']:
+                        if key in data and data[key]:
+                            try:
+                                val_str = str(data[key]).replace('%', '').strip()
+                                disc_val = float(val_str)
+                                break
+                            except: pass
+                    
+                    # Create PurchaseItem (Added gst_percent & discount_percent)
                     PurchaseItem.objects.create(
                         purchase=invoice,
                         product_name=p_name,
@@ -167,23 +184,15 @@ class PharmacyBulkUploadView(APIView):
                         ptr=ptr,
                         manufacturer=manufacturer,
                         hsn=hsn,
-                        tablets_per_strip=tps
+                        tablets_per_strip=tps,
+                        gst_percent=gst_val,
+                        discount_percent=disc_val
                     )
 
                     # Update/Create Stock
                     # User clarified that both 'Qty' and 'Free' are strips
                     total_qty_in = (qty + free) * tps
                     
-                    # Try to parse GST if available in common headers
-                    gst_val = 0
-                    for key in ['GST', 'GST%', 'Tax', 'Tax %', 'IGST', 'TaxPerc']:
-                        if key in data and data[key]:
-                            try:
-                                val_str = str(data[key]).replace('%', '').strip()
-                                gst_val = float(val_str)
-                                break
-                            except: pass
-
                     # Calculate Selling Price
                     # User confirmed "mrp price is sale price" (Selling at MRP)
                     calculated_selling_price = mrp
@@ -225,11 +234,24 @@ class PharmacyBulkUploadView(APIView):
                     pass
 
             if invoice:
-                # Recalculate total amount from items
-                total_inv = PurchaseItem.objects.filter(purchase=invoice).aggregate(
-                    total=models.Sum(models.F('purchase_rate') * models.F('qty'))
-                )['total'] or 0
-                invoice.total_amount = total_inv
+                # Recalculate total amount from items:
+                # Base = PTR * Qty
+                # Discount = Base * (Disc% / 100)
+                # Taxable = Base - Discount
+                # GST = Taxable * (GST% / 100)
+                # Total = Taxable + GST
+                items = PurchaseItem.objects.filter(purchase=invoice)
+                total_val = 0
+                for item in items:
+                    base_amount = float(item.ptr) * item.qty
+                    discount_amount = base_amount * (float(item.discount_percent) / 100.0)
+                    taxable = base_amount - discount_amount
+                    
+                    gst_amt = taxable * (float(item.gst_percent) / 100.0)
+                    
+                    total_val += (taxable + gst_amt)
+                
+                invoice.total_amount = total_val
                 invoice.save()
 
             return Response({
@@ -255,7 +277,7 @@ class PharmacyStockViewSet(viewsets.ModelViewSet):
     serializer_class = PharmacyStockSerializer
     permission_classes = [IsPharmacyOrAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'barcode', 'batch_no', 'supplier__supplier_name']
+    search_fields = ['name', 'barcode', 'batch_no']
     ordering_fields = ['expiry_date', 'qty_available', 'updated_at', 'supplier__supplier_name']
     ordering = ['expiry_date']
 
@@ -353,6 +375,14 @@ class PurchaseInvoiceViewSet(viewsets.ModelViewSet):
         ctx = super().get_serializer_context()
         ctx["request"] = self.request
         return ctx
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        # Recalculate total with new discount/courier values
+        new_total = instance.calculate_total()
+        if instance.total_amount != new_total:
+            instance.total_amount = new_total
+            instance.save()
 
 
 class PharmacySaleViewSet(viewsets.ModelViewSet):

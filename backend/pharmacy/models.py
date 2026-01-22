@@ -29,7 +29,32 @@ class PurchaseInvoice(BaseModel):
     credit_days = models.PositiveIntegerField(default=0)
     purchase_type = models.CharField(max_length=10, choices=PURCHASE_TYPE_CHOICES)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
+    
+    # Extra Expenses
+    cash_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    courier_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def calculate_total(self):
+        """Helper to calculate total based on items and extra expenses."""
+        item_total = sum(
+            (item.ptr * item.qty * (1 - (item.discount_percent / 100))) * (1 + (item.gst_percent / 100))
+            for item in self.items.all()
+        )
+        # Apply Extra Expenses
+        final_total = item_total - self.cash_discount + self.courier_charge
+        return round(final_total, 2)
+
+    def save(self, *args, **kwargs):
+        # We can't access self.items.all() on first save (no ID yet)
+        # So we only recalculate if ID exists, or rely on view to call save() again after adding items.
+        if self.pk:
+            # Note: This might be expensive if called frequently. 
+            # Ideally views should handle specific updates or use signals.
+            # But for safety, we allow manual recalc.
+            pass
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Inv {self.supplier_invoice_no} - {self.supplier.supplier_name}"
@@ -88,6 +113,8 @@ class PurchaseItem(BaseModel):
 
     manufacturer = models.CharField(max_length=255, blank=True)
     hsn = models.CharField(max_length=20, blank=True)
+    gst_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tablets_per_strip = models.PositiveIntegerField(default=1)
 
     def __str__(self):
