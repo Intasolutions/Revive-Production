@@ -298,10 +298,10 @@ const Pharmacy = () => {
                         ...item,
                         qty: qty * tps, // Convert to Tablets
                         free_qty: free * tps, // Convert to Tablets
-                        purchase_rate: (parseFloat(item.purchase_rate) || 0) / ((qty + free) * tps), // Unit Cost (Per Tab) based on Total Buy / Total Tabs (Paid+Free? Usually Cost is on Paid qty? But Average Cost includes Free? Standard practice: Cost / Total Qty)
-                        // Actually, total buy amount usually covers the paid qty. Free qty reduces effective unit cost.
-                        // Let's use (Total Buy) / (Total Tablets including Free).
-                        ptr: (parseFloat(item.purchase_rate) || 0) / ((qty + free) * tps),
+                        // Rate/Strip entered. Total Cost = Rate * Qty.
+                        // Unit Cost = Total Cost / Total Tablets (Qty+Free * TPS)
+                        purchase_rate: ((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps),
+                        ptr: ((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps),
                         mrp: (parseFloat(item.mrp) || 0) / tps, // Unit MRP = Strip MRP / TPS
                     };
                 })
@@ -778,7 +778,7 @@ const Pharmacy = () => {
                                     <table className="w-full text-left">
                                         <thead className="bg-slate-50 border-b border-slate-100">
                                             <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                <th className="px-4 py-4 w-[20%]">Product Name</th><th className="px-4 py-4">Batch</th><th className="px-4 py-4">HSN</th><th className="px-4 py-4">TPS</th><th className="px-4 py-4">Qty(Str)</th><th className="px-4 py-4">Free</th><th className="px-4 py-4 bg-blue-50/50">Total(Tab)</th><th className="px-4 py-4 text-right">Total Buy</th><th className="px-4 py-4 text-right">MRP / Strip</th><th className="px-4 py-4 text-right bg-blue-50/50">MRP (Tab)</th><th className="px-4 py-4 text-center">Action</th>
+                                                <th className="px-4 py-4 w-[20%]">Product Name</th><th className="px-4 py-4">Batch</th><th className="px-4 py-4">HSN</th><th className="px-4 py-4">TPS</th><th className="px-4 py-4">Qty(Str)</th><th className="px-4 py-4">Free</th><th className="px-4 py-4 bg-blue-50/50">Total(Tab)</th><th className="px-4 py-4 text-right">Rate / Strip</th><th className="px-4 py-4 text-right">MRP / Strip</th><th className="px-4 py-4 text-right bg-blue-50/50">MRP (Tab)</th><th className="px-4 py-4 text-center">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
@@ -797,11 +797,11 @@ const Pharmacy = () => {
                                                     <td className="px-4 py-3 w-12 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0" type="number" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} /></td>
                                                     <td className="px-4 py-3 text-center bg-blue-50/30 text-xs font-black text-blue-600">{((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)}</td>
                                                     <td className="px-4 py-3 w-20 text-right">
-                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-14 bg-transparent border-none text-right outline-none p-0" type="number" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} /></div>
-                                                        <span className="text-[9px] text-slate-400 block">@₹{((parseFloat(item.purchase_rate) || 0) / (parseInt(item.qty) || 1)).toFixed(2)}</span>
+                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-14 bg-transparent border-none text-right outline-none p-0" type="number" step="0.01" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} /></div>
+                                                        <span className="text-[9px] text-slate-400 block">@₹{((parseFloat(item.purchase_rate) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</span>
                                                     </td>
                                                     <td className="px-4 py-3 w-20 text-right">
-                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-14 bg-transparent border-none text-right outline-none p-0" type="number" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} /></div>
+                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-14 bg-transparent border-none text-right outline-none p-0" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} /></div>
                                                     </td>
                                                     <td className="px-4 py-3 text-right bg-blue-50/30 text-[10px] font-bold text-blue-600">₹{((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</td>
                                                     <td className="px-4 py-3 text-center"><button onClick={() => removeManualItem(idx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16} /></button></td>
@@ -812,7 +812,7 @@ const Pharmacy = () => {
                                         <tfoot className="bg-slate-50 font-bold">
                                             <tr className="text-slate-900 text-xs">
                                                 <td colSpan="6" className="px-4 py-4">Total Items: {manualInvoice.items.length} | Total Tablets: {manualInvoice.items.reduce((acc, item) => acc + (((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)), 0)}</td>
-                                                <td colSpan="4" className="px-4 py-4 text-right">Invoice Value: ₹{manualInvoice.items.reduce((acc, item) => acc + (parseFloat(item.purchase_rate) || 0), 0).toFixed(2)}</td>
+                                                <td colSpan="4" className="px-4 py-4 text-right">Invoice Value: ₹{manualInvoice.items.reduce((acc, item) => acc + ((parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0)), 0).toFixed(2)}</td>
                                                 <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
                                             </tr>
                                         </tfoot>
