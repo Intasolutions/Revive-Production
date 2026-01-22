@@ -137,7 +137,7 @@ const Pharmacy = () => {
     const [newSupplierName, setNewSupplierName] = useState('');
     const [showManualPurchaseModal, setShowManualPurchaseModal] = useState(false);
     const [manualInvoice, setManualInvoice] = useState({
-        supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: []
+        supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [], gst_percent: 0
     });
     const [scannedBarcode, setScannedBarcode] = useState('');
 
@@ -311,7 +311,7 @@ const Pharmacy = () => {
             await api.post('pharmacy/purchases/', payload);
             showToast('success', 'Stock updated!');
             setShowManualPurchaseModal(false);
-            setManualInvoice({ supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [] });
+            setManualInvoice({ supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [], gst_percent: 0 });
             fetchRecentImports();
             fetchStock();
         } catch (err) {
@@ -774,34 +774,45 @@ const Pharmacy = () => {
                                     <div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-600/10 text-blue-400 rounded-xl flex items-center justify-center border border-blue-400/20"><Search size={24} /></div><div><h3 className="text-white font-bold">Quick Barcode Scanning</h3><p className="text-slate-400 text-xs">Scan any product to add it instantly to the table below.</p></div></div>
                                     <div className="w-96 relative"><Input placeholder="Scan Barcode Now..." className="bg-white/5 border-white/10 text-white placeholder:text-slate-600 h-14 pr-12 text-lg font-mono tracking-widest focus:bg-white/10 transition-all" value={scannedBarcode} onChange={(e) => setScannedBarcode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBarcodeStockIn(e.target.value); }} autoFocus /><div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600"><CheckCircle2 size={24} /></div></div>
                                 </div>
-                                <div className="border border-slate-200 rounded-[24px] overflow-hidden shadow-sm">
-                                    <table className="w-full text-left">
+                                <div className="border border-slate-200 rounded-[24px] overflow-hidden shadow-sm overflow-x-auto">
+                                    <table className="w-full text-left min-w-[1000px]">
                                         <thead className="bg-slate-50 border-b border-slate-100">
                                             <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                <th className="px-4 py-4 w-[20%]">Product Name</th><th className="px-4 py-4">Batch</th><th className="px-4 py-4">Expiry</th><th className="px-4 py-4">HSN</th><th className="px-4 py-4">TPS</th><th className="px-4 py-4">Qty(Str)</th><th className="px-4 py-4">Free</th><th className="px-4 py-4 bg-blue-50/50">Total(Tab)</th><th className="px-4 py-4 text-right">Rate / Strip</th><th className="px-4 py-4 text-right">MRP / Strip</th><th className="px-4 py-4 text-right bg-blue-50/50">MRP (Tab)</th><th className="px-4 py-4 text-center">Action</th>
+                                                <th className="px-4 py-4 w-[200px]">Product Name</th>
+                                                <th className="px-4 py-4 w-[120px]">Batch</th>
+                                                <th className="px-4 py-4 w-[130px]">Expiry</th>
+                                                <th className="px-4 py-4 w-[80px]">HSN</th>
+                                                <th className="px-4 py-4 w-[80px]">TPS</th>
+                                                <th className="px-4 py-4 w-[80px]">Qty(Str)</th>
+                                                <th className="px-4 py-4 w-[80px]">Free</th>
+                                                <th className="px-4 py-4 bg-blue-50/50 w-[100px]">Total(Tab)</th>
+                                                <th className="px-4 py-4 text-right w-[100px]">Rate / Strip</th>
+                                                <th className="px-4 py-4 text-right w-[100px]">MRP / Strip</th>
+                                                <th className="px-4 py-4 text-right bg-blue-50/50 w-[100px]">MRP (Tab)</th>
+                                                <th className="px-4 py-4 text-center w-[60px]">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
                                             {manualInvoice.items.map((item, idx) => (
                                                 <tr key={idx} className="group hover:bg-slate-50/50">
                                                     <td className="px-4 py-3"><input className="w-full bg-transparent border-none text-xs font-bold text-slate-900 outline-none p-0" placeholder="Med name..." value={item.product_name} onChange={(e) => handleManualItemChange(idx, 'product_name', e.target.value)} /></td>
-                                                    <td className="px-4 py-3 w-24">
+                                                    <td className="px-4 py-3">
                                                         <input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="BATCH" value={item.batch_no} onChange={(e) => handleManualItemChange(idx, 'batch_no', e.target.value)} />
                                                     </td>
-                                                    <td className="px-4 py-3 w-28">
+                                                    <td className="px-4 py-3">
                                                         <input className="w-full bg-transparent border-none text-[10px] text-slate-400 outline-none p-0" type="date" value={item.expiry_date} onChange={(e) => handleManualItemChange(idx, 'expiry_date', e.target.value)} />
                                                     </td>
-                                                    <td className="px-4 py-3 w-16"><input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="HSN" value={item.hsn} onChange={(e) => handleManualItemChange(idx, 'hsn', e.target.value)} /></td>
-                                                    <td className="px-4 py-3 w-16 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} /></td>
-                                                    <td className="px-4 py-3 w-16 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0" type="number" value={item.qty} onChange={(e) => handleManualItemChange(idx, 'qty', e.target.value)} /></td>
-                                                    <td className="px-4 py-3 w-12 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0" type="number" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} /></td>
+                                                    <td className="px-4 py-3"><input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="HSN" value={item.hsn} onChange={(e) => handleManualItemChange(idx, 'hsn', e.target.value)} /></td>
+                                                    <td className="px-4 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} /></td>
+                                                    <td className="px-4 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.qty} onChange={(e) => handleManualItemChange(idx, 'qty', e.target.value)} /></td>
+                                                    <td className="px-4 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} /></td>
                                                     <td className="px-4 py-3 text-center bg-blue-50/30 text-xs font-black text-blue-600">{((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)}</td>
-                                                    <td className="px-4 py-3 w-20 text-right">
-                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-14 bg-transparent border-none text-right outline-none p-0" type="number" step="0.01" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} /></div>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner" type="number" step="0.01" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} /></div>
                                                         <span className="text-[9px] text-slate-400 block">@₹{((parseFloat(item.purchase_rate) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</span>
                                                     </td>
-                                                    <td className="px-4 py-3 w-20 text-right">
-                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-14 bg-transparent border-none text-right outline-none p-0" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} /></div>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} /></div>
                                                     </td>
                                                     <td className="px-4 py-3 text-right bg-blue-50/30 text-[10px] font-bold text-blue-600">₹{((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</td>
                                                     <td className="px-4 py-3 text-center"><button onClick={() => removeManualItem(idx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16} /></button></td>
@@ -812,7 +823,19 @@ const Pharmacy = () => {
                                         <tfoot className="bg-slate-50 font-bold">
                                             <tr className="text-slate-900 text-xs">
                                                 <td colSpan="7" className="px-4 py-4">Total Items: {manualInvoice.items.length} | Total Tablets: {manualInvoice.items.reduce((acc, item) => acc + (((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)), 0)}</td>
-                                                <td colSpan="4" className="px-4 py-4 text-right">Invoice Value: ₹{manualInvoice.items.reduce((acc, item) => acc + ((parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0)), 0).toFixed(2)}</td>
+                                                <td colSpan="4" className="px-4 py-4 text-right flex items-center justify-end gap-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">GST</span>
+                                                        <select className="bg-slate-100 border-none rounded-lg text-xs font-bold text-slate-700 outline-none py-1 px-2" value={manualInvoice.gst_percent} onChange={(e) => setManualInvoice(prev => ({ ...prev, gst_percent: parseInt(e.target.value) || 0 }))}>
+                                                            <option value={0}>0%</option>
+                                                            <option value={5}>5%</option>
+                                                            <option value={12}>12%</option>
+                                                            <option value={18}>18%</option>
+                                                            <option value={28}>28%</option>
+                                                        </select>
+                                                    </div>
+                                                    <span>Invoice Value: ₹{Math.round((manualInvoice.items.reduce((acc, item) => acc + ((parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0)), 0) * (1 + (manualInvoice.gst_percent / 100)))).toFixed(2)}</span>
+                                                </td>
                                                 <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
                                             </tr>
                                         </tfoot>

@@ -48,11 +48,22 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         
+        # Get Global GST from payload (if provided)
+        global_gst = 0
+        if 'gst_percent' in self.initial_data:
+            try:
+                global_gst = float(self.initial_data['gst_percent'])
+            except:
+                global_gst = 0
+
         # Calculate total_amount if items are present
-        total_amount = sum(
+        subtotal = sum(
             (float(item.get('purchase_rate', 0)) * int(item.get('qty', 0))) 
             for item in items_data
         )
+        
+        # Apply Global GST to Total
+        total_amount = round(subtotal * (1 + (global_gst / 100)))
         validated_data['total_amount'] = total_amount
 
         request = self.context.get('request')
@@ -84,7 +95,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                     'qty_available': qty_in,
                     'tablets_per_strip': tps,
                     'hsn': item.get('hsn', '') or '',
-                    'gst_percent': item.get('gst_percent', 0) or 0,
+                    'gst_percent': global_gst, # Apply Global GST
                     'manufacturer': item.get('manufacturer', '') or '',
                     'is_deleted': False,
                 }
@@ -99,7 +110,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                 stock.selling_price = item['mrp'] # User Rule: Sell at MRP
                 stock.purchase_rate = item.get('purchase_rate', stock.purchase_rate)
                 stock.hsn = item.get('hsn', stock.hsn)
-                stock.gst_percent = item.get('gst_percent', stock.gst_percent)
+                stock.gst_percent = global_gst # Apply Global GST
                 stock.manufacturer = item.get('manufacturer', stock.manufacturer)
                 stock.is_deleted = False
                 stock.save()

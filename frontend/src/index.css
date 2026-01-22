@@ -14,6 +14,8 @@ body {
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
+    /* Added for horizontal scroll */
 }
 
 ::-webkit-scrollbar-track {
@@ -31,6 +33,17 @@ body {
 
 .glass-dark {
     @apply bg-slate-900/70 backdrop-blur-md border-slate-700/30 shadow-2xl;
+}
+
+/* Hide Number Input Spinners */
+.no-spinner::-webkit-inner-spin-button,
+.no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.no-spinner {
+    -moz-appearance: textfield;
 }
 
 /* Print Styles */
