@@ -60,9 +60,7 @@ const Login = () => {
                         transition={{ delay: 0.2 }}
                         className="flex items-center gap-3 mb-12"
                     >
-                        <div className="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
-                            <Activity className="w-8 h-8 text-white" />
-                        </div>
+                        <img src="/logo/logo.png" alt="Revive Hospital" className="w-14 h-14 object-contain" />
                         <span className="text-2xl font-bold tracking-tight text-white">Revive<span className="text-blue-500">CMS</span></span>
                     </motion.div>
 
@@ -116,9 +114,7 @@ const Login = () => {
                 >
                     <div className="mb-10 text-center lg:text-left">
                         <div className="inline-flex lg:hidden items-center gap-2 mb-6">
-                            <div className="p-2 bg-blue-600 rounded-lg">
-                                <Activity className="w-5 h-5 text-white" />
-                            </div>
+                            <img src="/logo/logo.png" alt="Revive Hospital" className="w-8 h-8 object-contain" />
                             <span className="text-xl font-bold text-slate-900">Revive<span className="text-blue-600">CMS</span></span>
                         </div>
                         <h2 className="text-3xl font-bold text-slate-900 mb-2">Welcome Back</h2>

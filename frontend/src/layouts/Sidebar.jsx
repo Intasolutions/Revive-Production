@@ -37,9 +37,7 @@ const Sidebar = () => {
             {/* --- Branding Section --- */}
             <div className="h-20 flex items-center px-6 gap-4 overflow-hidden border-b border-slate-50">
                 <div className="flex-shrink-0 relative">
-                    <div className="w-10 h-10 bg-slate-950 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/10">
-                        <Heart className="w-5 h-5 text-blue-500" fill="currentColor" />
-                    </div>
+                    <img src="/logo/logo.png" alt="Revive" className="w-18 h-18 object-contain rounded-xl shadow-lg shadow-blue-500/10" />
                 </div>
                 <AnimatePresence>
                     {isHovered && (

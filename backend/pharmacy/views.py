@@ -251,7 +251,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
 
 
 # ✅ Read-only: stock should enter system only through supplier invoices
-class PharmacyStockViewSet(viewsets.ReadOnlyModelViewSet):
+class PharmacyStockViewSet(viewsets.ModelViewSet):
     serializer_class = PharmacyStockSerializer
     permission_classes = [IsPharmacyOrAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]

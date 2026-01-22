@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Pill, Plus, Search, ShoppingCart, AlertTriangle,
     Activity, User, Trash2, Printer, X, CheckCircle2,
-    Clock, UploadCloud, FileText, Send, Eye, ChevronRight, PackagePlus, FileSpreadsheet
+    Clock, UploadCloud, FileText, Send, Eye, ChevronRight, PackagePlus, FileSpreadsheet, Pencil, Check
 } from 'lucide-react';
 import { Button, Input } from '../components/UI';
 import Pagination from '../components/Pagination';
@@ -87,6 +87,29 @@ const Pharmacy = () => {
     const [selectedStockItem, setSelectedStockItem] = useState(null);
     const [suppliers, setSuppliers] = useState([]);
     const [filterSupplier, setFilterSupplier] = useState('');
+    const [editingStockId, setEditingStockId] = useState(null);
+    const [editQty, setEditQty] = useState('');
+
+    const startEditing = (item) => {
+        setEditingStockId(item.med_id || item.id);
+        setEditQty(item.qty_available);
+    };
+
+    const cancelEdit = () => {
+        setEditingStockId(null);
+        setEditQty('');
+    };
+
+    const saveStockUpdate = async (id) => {
+        try {
+            await api.patch(`pharmacy/stock/${id}/`, { qty_available: parseInt(editQty) });
+            showToast('success', 'Stock Updated');
+            setEditingStockId(null);
+            fetchStock();
+        } catch (err) {
+            showToast('error', 'Failed to update stock');
+        }
+    };
 
     // POS
     const [cart, setCart] = useState([]);
@@ -356,14 +379,24 @@ const Pharmacy = () => {
                                             <td className="px-6 py-3 font-mono text-xs font-bold text-slate-600">{s.batch_no}</td>
                                             <td className="px-6 py-3 font-mono text-xs font-bold text-slate-600">{new Date(s.expiry_date).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}</td>
                                             <td className="px-6 py-3">
-                                                <div className="flex flex-col">
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${s.qty_available < 10 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                        {s.qty_available} TAB
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
-                                                        ({Math.floor(s.qty_available / (s.tablets_per_strip || 1))} STR, {s.qty_available % (s.tablets_per_strip || 1)} TAB)
-                                                    </span>
-                                                </div>
+                                                {(editingStockId === (s.med_id || s.id)) ? (
+                                                    <Input
+                                                        type="number"
+                                                        value={editQty}
+                                                        onChange={(e) => setEditQty(e.target.value)}
+                                                        className="w-24 h-8 text-xs font-bold"
+                                                        autoFocus
+                                                    />
+                                                ) : (
+                                                    <div className="flex flex-col">
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${s.qty_available < 10 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                            {s.qty_available} TAB
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                                                            ({Math.floor(s.qty_available / (s.tablets_per_strip || 1))} STR, {s.qty_available % (s.tablets_per_strip || 1)} TAB)
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-3 font-bold text-sm text-slate-500">
                                                 <div className="flex flex-col">
@@ -382,7 +415,25 @@ const Pharmacy = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3">
-                                                <ActionTooltip text="View Details"><button onClick={() => setSelectedStockItem(s)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Eye size={16} /></button></ActionTooltip>
+                                                {(editingStockId === (s.med_id || s.id)) ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <ActionTooltip text="Save">
+                                                            <button onClick={() => saveStockUpdate(s.med_id || s.id)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"><Check size={16} /></button>
+                                                        </ActionTooltip>
+                                                        <ActionTooltip text="Cancel">
+                                                            <button onClick={cancelEdit} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><X size={16} /></button>
+                                                        </ActionTooltip>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1">
+                                                        <ActionTooltip text="Edit Qty">
+                                                            <button onClick={() => startEditing(s)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Pencil size={16} /></button>
+                                                        </ActionTooltip>
+                                                        <ActionTooltip text="View Details">
+                                                            <button onClick={() => setSelectedStockItem(s)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Eye size={16} /></button>
+                                                        </ActionTooltip>
+                                                    </div>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
