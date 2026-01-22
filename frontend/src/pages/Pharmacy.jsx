@@ -300,9 +300,9 @@ const Pharmacy = () => {
                         free_qty: free * tps, // Convert to Tablets
                         // Rate/Strip entered. Total Cost = Rate * Qty.
                         // Unit Cost = Total Cost / Total Tablets (Qty+Free * TPS)
-                        purchase_rate: ((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps),
-                        ptr: ((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps),
-                        mrp: (parseFloat(item.mrp) || 0) / tps, // Unit MRP = Strip MRP / TPS
+                        purchase_rate: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps)).toFixed(2)),
+                        ptr: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / ((qty + free) * tps)).toFixed(2)),
+                        mrp: parseFloat(((parseFloat(item.mrp) || 0) / tps).toFixed(2)), // Unit MRP = Strip MRP / TPS
                     };
                 })
             };
@@ -778,18 +778,18 @@ const Pharmacy = () => {
                                     <table className="w-full text-left">
                                         <thead className="bg-slate-50 border-b border-slate-100">
                                             <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                <th className="px-4 py-4 w-[20%]">Product Name</th><th className="px-4 py-4">Batch</th><th className="px-4 py-4">HSN</th><th className="px-4 py-4">TPS</th><th className="px-4 py-4">Qty(Str)</th><th className="px-4 py-4">Free</th><th className="px-4 py-4 bg-blue-50/50">Total(Tab)</th><th className="px-4 py-4 text-right">Rate / Strip</th><th className="px-4 py-4 text-right">MRP / Strip</th><th className="px-4 py-4 text-right bg-blue-50/50">MRP (Tab)</th><th className="px-4 py-4 text-center">Action</th>
+                                                <th className="px-4 py-4 w-[20%]">Product Name</th><th className="px-4 py-4">Batch</th><th className="px-4 py-4">Expiry</th><th className="px-4 py-4">HSN</th><th className="px-4 py-4">TPS</th><th className="px-4 py-4">Qty(Str)</th><th className="px-4 py-4">Free</th><th className="px-4 py-4 bg-blue-50/50">Total(Tab)</th><th className="px-4 py-4 text-right">Rate / Strip</th><th className="px-4 py-4 text-right">MRP / Strip</th><th className="px-4 py-4 text-right bg-blue-50/50">MRP (Tab)</th><th className="px-4 py-4 text-center">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
                                             {manualInvoice.items.map((item, idx) => (
                                                 <tr key={idx} className="group hover:bg-slate-50/50">
                                                     <td className="px-4 py-3"><input className="w-full bg-transparent border-none text-xs font-bold text-slate-900 outline-none p-0" placeholder="Med name..." value={item.product_name} onChange={(e) => handleManualItemChange(idx, 'product_name', e.target.value)} /></td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex flex-col gap-1">
-                                                            <input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="BATCH" value={item.batch_no} onChange={(e) => handleManualItemChange(idx, 'batch_no', e.target.value)} />
-                                                            <input className="w-full bg-transparent border-none text-[10px] text-slate-400 outline-none p-0" type="date" value={item.expiry_date} onChange={(e) => handleManualItemChange(idx, 'expiry_date', e.target.value)} />
-                                                        </div>
+                                                    <td className="px-4 py-3 w-24">
+                                                        <input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="BATCH" value={item.batch_no} onChange={(e) => handleManualItemChange(idx, 'batch_no', e.target.value)} />
+                                                    </td>
+                                                    <td className="px-4 py-3 w-28">
+                                                        <input className="w-full bg-transparent border-none text-[10px] text-slate-400 outline-none p-0" type="date" value={item.expiry_date} onChange={(e) => handleManualItemChange(idx, 'expiry_date', e.target.value)} />
                                                     </td>
                                                     <td className="px-4 py-3 w-16"><input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="HSN" value={item.hsn} onChange={(e) => handleManualItemChange(idx, 'hsn', e.target.value)} /></td>
                                                     <td className="px-4 py-3 w-16 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} /></td>
@@ -807,11 +807,11 @@ const Pharmacy = () => {
                                                     <td className="px-4 py-3 text-center"><button onClick={() => removeManualItem(idx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16} /></button></td>
                                                 </tr>
                                             ))}
-                                            {manualInvoice.items.length === 0 && (<tr><td colSpan="8" className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest bg-slate-50/50">Scan or add items to begin</td></tr>)}
+                                            {manualInvoice.items.length === 0 && (<tr><td colSpan="12" className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest bg-slate-50/50">Scan or add items to begin</td></tr>)}
                                         </tbody>
                                         <tfoot className="bg-slate-50 font-bold">
                                             <tr className="text-slate-900 text-xs">
-                                                <td colSpan="6" className="px-4 py-4">Total Items: {manualInvoice.items.length} | Total Tablets: {manualInvoice.items.reduce((acc, item) => acc + (((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)), 0)}</td>
+                                                <td colSpan="7" className="px-4 py-4">Total Items: {manualInvoice.items.length} | Total Tablets: {manualInvoice.items.reduce((acc, item) => acc + (((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)), 0)}</td>
                                                 <td colSpan="4" className="px-4 py-4 text-right">Invoice Value: ₹{manualInvoice.items.reduce((acc, item) => acc + ((parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0)), 0).toFixed(2)}</td>
                                                 <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
                                             </tr>

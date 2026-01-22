@@ -1477,11 +1477,11 @@ const Laboratory = () => {
                             }
                             .print-portal-content {
                                 display: block !important;
-                                position: relative !important;
+                                position: absolute !important;
                                 top: 0 !important;
                                 left: 0 !important;
                                 width: 100% !important;
-                                height: auto !important;
+                                height: 100% !important;
                                 z-index: 9999 !important;
                                 background-color: white !important;
                                 color: black !important;
@@ -1492,6 +1492,10 @@ const Laboratory = () => {
                             }
                             .print-portal-content * {
                                 visibility: visible !important;
+                            }
+                            /* Hide everything else explicitly just in case */
+                            body > *:not(.print-portal-content) {
+                                display: none !important;
                             }
                             * {
                                 -webkit-print-color-adjust: exact !important;
