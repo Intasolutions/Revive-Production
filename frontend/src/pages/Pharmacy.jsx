@@ -973,6 +973,7 @@ const Pharmacy = () => {
                                                 <th className="px-3 py-4 w-[60px]">Free</th>
                                                 <th className="px-3 py-4 bg-blue-50/50 w-[80px]">Total(Tab)</th>
                                                 <th className="px-3 py-4 text-right w-[90px]">Rate</th>
+                                                <th className="px-3 py-4 text-center w-[60px]">Disc%</th>
                                                 <th className="px-3 py-4 text-center w-[60px]">GST%</th>
                                                 <th className="px-3 py-4 text-right w-[90px]">MRP</th>
                                                 <th className="px-3 py-4 text-right bg-blue-50/50 w-[90px]">MRP(Tab)</th>
@@ -1023,6 +1024,9 @@ const Pharmacy = () => {
                                                         <span className="text-[9px] text-slate-400 block">@₹{((parseFloat(item.purchase_rate) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</span>
                                                     </td>
                                                     <td className="px-3 py-3 text-center">
+                                                        <input className="w-full bg-transparent border-dashed border-b border-slate-300 text-xs font-bold text-center text-rose-500 outline-none p-0 no-spinner focus:border-rose-500" type="number" placeholder="0%" value={item.discount_percent || ''} onChange={(e) => handleManualItemChange(idx, 'discount_percent', e.target.value)} />
+                                                    </td>
+                                                    <td className="px-3 py-3 text-center">
                                                         <input className="w-full bg-transparent border-dashed border-b border-slate-300 text-xs font-bold text-center text-blue-600 outline-none p-0 no-spinner focus:border-blue-500" type="number" placeholder="0%" value={item.gst_percent} onChange={(e) => handleManualItemChange(idx, 'gst_percent', e.target.value)} />
                                                     </td>
                                                     <td className="px-3 py-3 text-right">
@@ -1036,17 +1040,66 @@ const Pharmacy = () => {
                                             ))}
                                             {manualInvoice.items.length === 0 && (<tr><td colSpan="13" className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest bg-slate-50/50">Scan or add items to begin</td></tr>)}
                                         </tbody>
-                                        <tfoot className="bg-slate-50 font-bold">
-                                            <tr className="text-slate-900 text-xs">
-                                                <td colSpan="8" className="px-4 py-4">Total Items: {manualInvoice.items.length} | Total Tablets: {manualInvoice.items.reduce((acc, item) => acc + (((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)), 0)}</td>
-                                                <td colSpan="4" className="px-4 py-4 text-right flex items-center justify-end gap-3">
-                                                    <span>Invoice Value (Inc. Total GST): ₹{Math.round(manualInvoice.items.reduce((acc, item) => {
-                                                        const taxable = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
+                                        <tfoot className="bg-slate-50 border-t-2 border-slate-100">
+                                            {/* Subtotal */}
+                                            <tr>
+                                                <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item Total (Taxable + GST)</td>
+                                                <td colSpan="3" className="px-4 py-2 text-right text-sm font-bold text-slate-600">
+                                                    ₹{manualInvoice.items.reduce((acc, item) => {
+                                                        const base = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
+                                                        const discount = base * ((parseFloat(item.discount_percent) || 0) / 100);
+                                                        const taxable = base - discount;
                                                         const gst = taxable * ((parseFloat(item.gst_percent) || 0) / 100);
                                                         return acc + taxable + gst;
-                                                    }, 0)).toFixed(2)}</span>
+                                                    }, 0).toFixed(2)}
                                                 </td>
-                                                <td className="px-4 py-3 text-center"><button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, gst_percent: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))} className="p-2 bg-white border border-slate-200 text-blue-600 rounded-xl hover:shadow-md transition-all shadow-sm"><Plus size={20} /></button></td>
+                                                <td className="px-4 py-2 text-center">
+                                                    <button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, gst_percent: 0, discount_percent: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))} className="p-1 px-3 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 border border-blue-200 shadow-sm">+ Add Row</button>
+                                                </td>
+                                            </tr>
+                                            {/* Cash Discount */}
+                                            <tr>
+                                                <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Less: Cash Discount</td>
+                                                <td colSpan="3" className="px-4 py-2 text-right">
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0"
+                                                        value={manualInvoice.cash_discount || ''}
+                                                        onChange={(e) => setManualInvoice(prev => ({ ...prev, cash_discount: parseFloat(e.target.value) || 0 }))}
+                                                        className="w-24 text-right bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500"
+                                                    />
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                            {/* Courier Charge */}
+                                            <tr>
+                                                <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Add: Courier Charge</td>
+                                                <td colSpan="3" className="px-4 py-2 text-right">
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0"
+                                                        value={manualInvoice.courier_charge || ''}
+                                                        onChange={(e) => setManualInvoice(prev => ({ ...prev, courier_charge: parseFloat(e.target.value) || 0 }))}
+                                                        className="w-24 text-right bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500"
+                                                    />
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                            {/* Grand Total */}
+                                            <tr className="bg-slate-100">
+                                                <td colSpan="11" className="px-4 py-4 text-right text-xs font-black text-slate-900 uppercase tracking-widest">Grand Total</td>
+                                                <td colSpan="3" className="px-4 py-4 text-right">
+                                                    <div className="text-xl font-black text-blue-600">
+                                                        ₹{(manualInvoice.items.reduce((acc, item) => {
+                                                            const base = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
+                                                            const discount = base * ((parseFloat(item.discount_percent) || 0) / 100);
+                                                            const taxable = base - discount;
+                                                            const gst = taxable * ((parseFloat(item.gst_percent) || 0) / 100);
+                                                            return acc + taxable + gst;
+                                                        }, 0) - (manualInvoice.cash_discount || 0) + (manualInvoice.courier_charge || 0)).toFixed(2)}
+                                                    </div>
+                                                </td>
+                                                <td></td>
                                             </tr>
                                         </tfoot>
                                     </table>
