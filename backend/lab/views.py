@@ -5,8 +5,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models
 
 from billing.models import Invoice, InvoiceItem
-from .models import LabInventory, LabCharge, LabInventoryLog, LabTest
-from .serializers import LabInventorySerializer, LabChargeSerializer, LabInventoryLogSerializer, LabTestSerializer
+from .models import LabInventory, LabCharge, LabInventoryLog, LabTest, LabCategory
+from .serializers import LabInventorySerializer, LabChargeSerializer, LabInventoryLogSerializer, LabTestSerializer, LabCategorySerializer
 
 
 
@@ -16,6 +16,13 @@ class IsLabOrAdmin(permissions.BasePermission):
             return False
         # Allow LAB, ADMIN, and DOCTOR (doctors need to search lab tests for requisitions)
         return request.user.is_superuser or getattr(request.user, "role", None) in ["LAB", "ADMIN", "DOCTOR"]
+
+
+class LabCategoryViewSet(viewsets.ModelViewSet):
+    queryset = LabCategory.objects.all().order_by('name')
+    serializer_class = LabCategorySerializer
+    permission_classes = [IsLabOrAdmin]
+    pagination_class = None
 
 
 class LabTestViewSet(viewsets.ModelViewSet):

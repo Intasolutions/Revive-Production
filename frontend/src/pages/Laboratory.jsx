@@ -2,10 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    FlaskConical, Beaker, Plus, Search, AlertTriangle,
-    User, Calendar, ClipboardCheck, X, CheckCircle2,
-    Clock, Activity, Printer, FileText, ChevronRight,
-    MapPin, Phone, Filter, TestTube2, Microscope, Pencil
+    Activity,
+    Search,
+    Filter,
+    Plus,
+    X,
+    ChevronDown,
+    ChevronRight,
+    TestTube2,
+    FlaskConical,
+    ClipboardList,
+    AlertCircle,
+    CheckCircle2,
+    Clock,
+    FileText,
+    Printer,
+    Trash2,
+    MapPin, Phone, Microscope, Pencil
 } from 'lucide-react';
 import { Card, Button, Input, Table } from '../components/UI';
 import Pagination from '../components/Pagination';
@@ -56,6 +69,7 @@ const Laboratory = () => {
     const [showInventoryModal, setShowInventoryModal] = useState(false); // Add Inventory Modal
     const [showResultModal, setShowResultModal] = useState(false);
     const [showPrintModal, setShowPrintModal] = useState(false);
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [stockModal, setStockModal] = useState({ show: false, type: 'IN', item: null });
 
     // Selected Items
@@ -71,6 +85,8 @@ const Laboratory = () => {
     const [inventoryForm, setInventoryForm] = useState({ item_name: '', category: 'REAGENT', qty: 0, cost_per_unit: '', reorder_level: 10 });
     const [visitSearch, setVisitSearch] = useState([]);
     const [visitQuery, setVisitQuery] = useState('');
+    const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
+    const [categories, setCategories] = useState([]);
 
     // --- Effects ---
     useEffect(() => {
@@ -109,6 +125,12 @@ const Laboratory = () => {
         } else if (activeTab === 'test_catalog') {
             fetchLabTests();
             fetchInventory(); // Needed for Recipe Dropdown
+            fetchCategories();
+        } else if (activeTab === 'inventory') {
+            fetchInventory();
+            fetchCategories();
+        } else if (activeTab === 'categories') {
+            fetchCategories();
         } else {
             fetchInventory();
         }
@@ -214,6 +236,13 @@ const Laboratory = () => {
             const { data } = await api.get('lab/tests/');
             setLabTests(data.results || data || []);
         } catch (err) { console.error("Failed to load tests", err); }
+    };
+
+    const fetchCategories = async () => {
+        try {
+            const { data } = await api.get('lab/categories/');
+            setCategories(data.results || data || []);
+        } catch (err) { console.error("Failed to load categories", err); }
     };
 
     const handleSaveTest = async (e) => {
@@ -435,6 +464,26 @@ const Laboratory = () => {
         setShowInventoryModal(true);
     };
 
+    const handleAddCategory = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('lab/categories/', categoryForm);
+            showToast('success', 'Category Created Successfully');
+            setShowCategoryModal(false);
+            setCategoryForm({ name: '', description: '' });
+            fetchCategories();
+        } catch (err) { showToast('error', 'Failed to create category'); }
+    };
+
+    const handleDeleteCategory = async (id) => {
+        if (!confirm("Delete this category?")) return;
+        try {
+            await api.delete(`lab/categories/${id}/`);
+            showToast('success', 'Category Deleted');
+            fetchCategories();
+        } catch (err) { showToast('error', 'Failed to delete category'); }
+    };
+
     return (
         <div className="p-6 h-screen bg-[#F8FAFC] font-sans text-slate-900 flex flex-col overflow-hidden print:h-auto print:overflow-visible print:bg-white print:p-0 print:block">
 
@@ -445,13 +494,13 @@ const Laboratory = () => {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-950">Laboratory</h1>
                         <div className="flex items-center gap-6 mt-2">
-                            {['queue', 'inventory', 'test_catalog'].map(tab => (
+                            {['queue', 'inventory', 'test_catalog', 'categories'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
                                     className={`pb-1 text-sm font-bold transition-all border-b-2 ${activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
                                 >
-                                    {tab === 'queue' ? 'Diagnostic Queue' : tab === 'inventory' ? 'Lab Inventory' : 'Test Catalog'}
+                                    {tab === 'queue' ? 'Diagnostic Queue' : tab === 'inventory' ? 'Lab Inventory' : tab === 'test_catalog' ? 'Test Catalog' : 'Categories'}
                                 </button>
                             ))}
                         </div>
@@ -465,9 +514,13 @@ const Laboratory = () => {
                             <button onClick={() => setShowInventoryModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95">
                                 <Plus size={18} /> Add Item
                             </button>
-                        ) : (
+                        ) : activeTab === 'test_catalog' ? (
                             <button onClick={() => { setEditingTestId(null); setTestCatalogForm({ name: '', category: 'HAEMATOLOGY', price: '', normal_range: '', parameters: [] }); setShowTestModal(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-95">
                                 <Plus size={18} /> Add Test
+                            </button>
+                        ) : (
+                            <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-600/20 hover:bg-purple-700 transition-all active:scale-95">
+                                <Plus size={18} /> Add Category
                             </button>
                         )}
                     </div>
@@ -688,20 +741,70 @@ const Laboratory = () => {
                             </div>
                         </div>
                     )}
+                    {/* 4. CATEGORIES TAB */}
+                    {activeTab === 'categories' && (
+                        <div className="flex flex-col h-full">
+                            <div className="flex-1 overflow-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-slate-50 sticky top-0 shadow-sm">
+                                        <tr>
+                                            {['Category Name', 'Actions'].map(h => (
+                                                <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {categories.map(cat => (
+                                            <tr key={cat.id} className="hover:bg-slate-50 transition-colors group">
+                                                <td className="px-6 py-4 font-bold text-slate-900 text-sm w-full">{cat.name}</td>
+                                                <td className="px-6 py-4">
+                                                    <button onClick={() => handleDeleteCategory(cat.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Delete">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* --- Modals (Outside the hidden div) --- */}
+            {/* New Category Modal */}
+            <AnimatePresence>
+                {showCategoryModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm no-print">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden flex flex-col">
+                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <h3 className="text-lg font-black text-purple-900 uppercase tracking-tight">New Category</h3>
+                                <button onClick={() => setShowCategoryModal(false)} className="p-2 rounded-full hover:bg-slate-200 transition-colors"><X size={20} className="text-slate-500" /></button>
+                            </div>
+                            <form onSubmit={handleAddCategory} className="p-8 space-y-6">
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Name</label>
+                                        <Input value={categoryForm.name} onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value.toUpperCase() })} required className="bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="e.g. SEROLOGY" />
+                                    </div>
+                                </div>
+                                <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-purple-500/20">Create Category</Button>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
             {/* New Test Catalog Modal */}
             <AnimatePresence>
                 {showTestModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm no-print">
-                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden flex flex-col">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <h3 className="text-lg font-black text-emerald-900 uppercase tracking-tight">{editingTestId ? 'Edit Test' : 'Add New Test'}</h3>
                                 <button onClick={() => setShowTestModal(false)} className="p-2 rounded-full hover:bg-slate-200 transition-colors"><X size={20} className="text-slate-500" /></button>
                             </div>
-                            <form onSubmit={handleSaveTest} className="p-8 space-y-6">
+                            <form onSubmit={handleSaveTest} className="p-8 space-y-6 overflow-y-auto">
                                 {/* ... existing form fields ... */}
                                 <div className="space-y-4">
                                     <div className="space-y-2">
@@ -716,9 +819,9 @@ const Laboratory = () => {
                                                 onChange={e => setTestCatalogForm({ ...testCatalogForm, category: e.target.value })}
                                                 className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-800 focus:border-blue-500 outline-none transition-all appearance-none"
                                             >
-                                                {['HAEMATOLOGY', 'BIOCHEMISTRY', 'URINE', 'STOOL', 'OTHERS'].map(c => (
-                                                    <option key={c} value={c}>{c}</option>
-                                                ))}
+                                                {categories.length > 0 ? categories.map(c => (
+                                                    <option key={c.id} value={c.name}>{c.name}</option>
+                                                )) : <option value="HAEMATOLOGY">HAEMATOLOGY</option>}
                                             </select>
                                             <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={16} />
                                         </div>
@@ -1574,20 +1677,23 @@ const Laboratory = () => {
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Category</label>
                                         <div className="relative">
-                                            <Input
+                                            <select
                                                 value={inventoryForm.category}
                                                 onChange={e => setInventoryForm({ ...inventoryForm, category: e.target.value })}
-                                                placeholder="e.g. Reagent, Kit, Consumable..."
-                                                className="bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-sm text-slate-800 focus:border-blue-500 outline-none transition-all"
-                                                list="category-suggestions"
-                                                required
-                                            />
-                                            <datalist id="category-suggestions">
-                                                <option value="REAGENT" />
-                                                <option value="KIT" />
-                                                <option value="CONSUMABLE" />
-                                                <option value="EQUIPMENT" />
-                                            </datalist>
+                                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-800 focus:border-blue-500 outline-none transition-all appearance-none"
+                                            >
+                                                {categories.length > 0 ? categories.map(c => (
+                                                    <option key={c.id} value={c.name}>{c.name}</option>
+                                                )) : (
+                                                    <>
+                                                        <option value="REAGENT">REAGENT</option>
+                                                        <option value="KIT">KIT</option>
+                                                        <option value="CONSUMABLE">CONSUMABLE</option>
+                                                        <option value="EQUIPMENT">EQUIPMENT</option>
+                                                    </>
+                                                )}
+                                            </select>
+                                            <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={16} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">

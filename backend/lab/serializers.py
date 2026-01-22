@@ -1,5 +1,12 @@
 from rest_framework import serializers
-from .models import LabInventory, LabCharge, LabInventoryLog, LabTest, LabTestParameter, LabTestRequiredItem
+from .models import LabInventory, LabCharge, LabInventoryLog, LabTest, LabTestParameter, LabTestRequiredItem, LabCategory
+
+
+class LabCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabCategory
+        fields = ['id', 'name', 'description']
+
 
 
 class LabTestParameterSerializer(serializers.ModelSerializer):
@@ -17,13 +24,12 @@ class LabTestRequiredItemSerializer(serializers.ModelSerializer):
 
 
 class LabTestSerializer(serializers.ModelSerializer):
-    category_display = serializers.CharField(source='get_category_display', read_only=True)
     parameters = LabTestParameterSerializer(many=True, required=False)
     required_items = LabTestRequiredItemSerializer(many=True, required=False)
 
     class Meta:
         model = LabTest
-        fields = ['id', 'name', 'category', 'category_display', 'price', 'normal_range', 'parameters', 'required_items']
+        fields = ['id', 'name', 'category', 'price', 'normal_range', 'parameters', 'required_items']
 
     def create(self, validated_data):
         parameters_data = validated_data.pop('parameters', [])

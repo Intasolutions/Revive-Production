@@ -59,27 +59,24 @@ class LabCharge(BaseModel):
         return f"{self.test_name} - {getattr(self.visit, 'id', self.visit.id)}"
 
 
-class LabTest(BaseModel):
-    CATEGORY_CHOICES = (
-        ('HAEMATOLOGY', 'Haematology'),
-        ('IMMUNO_HAEMATOLOGY', 'Immuno Haematology'),
-        ('BIOCHEMISTRY', 'Biochemistry'),
-        ('URINE', 'Urine Test'),
-        ('STOOL', 'Stool Test'),
-        ('MICROBIOLOGY', 'Microbiology'),
-        ('SEROLOGY', 'Serology'),
-        ('HORMONE', 'Hormone Assay'),
-        ('XRAY', 'X-Ray'),
-        ('OTHERS', 'Others'),
-    )
 
+
+class LabCategory(BaseModel):
+    name = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+
+class LabTest(BaseModel):
     name = models.CharField(max_length=255)
-    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    category = models.CharField(max_length=50) # Managed via LabCategory, but kept loose for flexibility
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     normal_range = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.name} ({self.get_category_display()})"
+        return f"{self.name} ({self.category})"
 
 
 class LabTestParameter(BaseModel):
