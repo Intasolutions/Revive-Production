@@ -1,5 +1,10 @@
 from django.contrib import admin
-from .models import LabInventory, LabCharge, LabTest
+from .models import LabInventory, LabCharge, LabTest, LabCategory
+
+@admin.register(LabCategory)
+class LabCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'id')
+    search_fields = ('name',)
 
 @admin.register(LabInventory)
 class LabInventoryAdmin(admin.ModelAdmin):
