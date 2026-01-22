@@ -267,23 +267,56 @@ const Pharmacy = () => {
     };
     const removeManualItem = (idx) => { setManualInvoice(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); };
     const submitManualPurchase = async () => {
-        if (!manualInvoice.supplier || !manualInvoice.supplier_invoice_no || manualInvoice.items.length === 0) return showToast('error', 'Please fill all required fields.');
+        if (!manualInvoice.supplier || !manualInvoice.supplier_invoice_no || manualInvoice.items.length === 0) {
+            return showToast('error', 'Please fill all required fields (Supplier, Invoice No, Items).');
+        }
+
+        // Validate individual items
+        for (let i = 0; i < manualInvoice.items.length; i++) {
+            const item = manualInvoice.items[i];
+            if (!item.product_name || !item.batch_no || !item.expiry_date) {
+                const missing = [];
+                if (!item.product_name) missing.push('Name');
+                if (!item.batch_no) missing.push('Batch');
+                if (!item.expiry_date) missing.push('Expiry');
+                return showToast('error', `Item #${i + 1} Missing: ${missing.join(', ')}`);
+            }
+            if (!item.qty || parseInt(item.qty) <= 0) {
+                return showToast('error', `Item #${i + 1}: Quantity must be valid.`);
+            }
+        }
+
         try {
             // Convert Total Values to Unit Values for Backend
             const payload = {
                 ...manualInvoice,
                 items: manualInvoice.items.map(item => {
                     const qty = parseInt(item.qty) || 1;
+                    const free = parseInt(item.free_qty) || 0;
                     return {
                         ...item,
+                        qty: qty, // Ensure int
+                        free_qty: free, // Ensure int
                         purchase_rate: (parseFloat(item.purchase_rate) || 0) / qty, // Derive Unit Rate
                         ptr: (parseFloat(item.purchase_rate) || 0) / qty,
                         mrp: (parseFloat(item.mrp) || 0) / qty, // Derive Unit MRP
                     };
                 })
             };
-            setLoading(true); await api.post('pharmacy/purchases/', payload); showToast('success', 'Stock updated!'); setShowManualPurchaseModal(false); setManualInvoice({ supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [] }); fetchRecentImports(); fetchStock();
-        } catch (err) { showToast('error', `Failed: ${err.response?.data?.detail || "Check fields"}`); } finally { setLoading(false); }
+            setLoading(true);
+            await api.post('pharmacy/purchases/', payload);
+            showToast('success', 'Stock updated!');
+            setShowManualPurchaseModal(false);
+            setManualInvoice({ supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [] });
+            fetchRecentImports();
+            fetchStock();
+        } catch (err) {
+            console.error("Purchase Failed:", err.response?.data);
+            const msg = err.response?.data ? JSON.stringify(err.response.data) : "Check fields";
+            showToast('error', `Failed: ${msg}`);
+        } finally {
+            setLoading(false);
+        }
     };
     const calculateTotals = () => { const subtotal = cart.reduce((acc, item) => acc + (item.selling_price * item.qty), 0); return { subtotal, net: Math.ceil(subtotal) }; };
     useEffect(() => {
@@ -324,11 +357,36 @@ const Pharmacy = () => {
         setLoading(true); const newCart = [];
         try {
             const medNames = Object.keys(visit.prescription); for (const name of medNames) {
-                const details = visit.prescription[name]; let qty = 1; const qtyMatch = details.match(/Qty:\s*(\d+)/i); if (qtyMatch) qty = parseInt(qtyMatch[1]); const { data } = await api.get(`pharmacy/stock/?search=${encodeURIComponent(name)}`); const results = data.results || data || []; const match = results.find(r => r.name.toLowerCase() === name.toLowerCase()) || results[0]; if (match) {
+                const details = visit.prescription[name];
+                let qty = 1;
+                let dosage = '';
+                let duration = '';
+
+                // Parse details (Format: "1-0-1 | 5 Days | Qty: 15")
+                const parts = details.split('|');
+                if (parts.length > 0) dosage = parts[0].trim();
+                if (parts.length > 1) duration = parts[1].trim();
+
+                const qtyMatch = details.match(/Qty:\s*(\d+)/i);
+                if (qtyMatch) qty = parseInt(qtyMatch[1]);
+
+                const { data } = await api.get(`pharmacy/stock/?search=${encodeURIComponent(name)}`);
+                const results = data.results || data || [];
+                const match = results.find(r => r.name.toLowerCase() === name.toLowerCase()) || results[0];
+                if (match) {
                     const tps = match.tablets_per_strip || 1;
                     const stripPrice = match.mrp; // Selling at MRP
                     const tabletPrice = stripPrice / tps;
-                    newCart.push({ ...match, qty: qty, selling_price: tabletPrice, strip_price: stripPrice, gst_applied: gstRate, original_mrp: match.mrp });
+                    newCart.push({
+                        ...match,
+                        qty: qty,
+                        selling_price: tabletPrice,
+                        strip_price: stripPrice,
+                        gst_applied: gstRate,
+                        original_mrp: match.mrp,
+                        dosage: dosage,
+                        duration: duration
+                    });
                 }
             } setCart(newCart); if (newCart.length > 0) showToast('success', 'Rx loaded');
         } catch (err) { console.error(err); } finally { setLoading(false); }
@@ -509,7 +567,11 @@ const Pharmacy = () => {
                                     <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                                         <div className="flex-1">
                                             <p className="text-sm font-bold text-slate-900 line-clamp-1">{item.name}</p>
-                                            <p className="text-[10px] text-slate-400 font-mono">₹{item.selling_price.toFixed(2)} / Tab x {item.qty} Tabs</p>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                {item.dosage && <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase">{item.dosage}</span>}
+                                                {item.duration && <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">{item.duration}</span>}
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">₹{item.selling_price.toFixed(2)} / Tab x {item.qty} Tabs</p>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
