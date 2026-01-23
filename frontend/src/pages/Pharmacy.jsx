@@ -382,8 +382,8 @@ const Pharmacy = () => {
 
                     return {
                         ...item,
-                        qty: qty * tps, // Convert to Tablets (Inventory is tracked in Tablets)
-                        free_qty: free * tps, // Convert to Tablets
+                        qty: qty, // Backend will handle conversion to Tablets using tps
+                        free_qty: free, // Backend will handle conversion to Tablets using tps
                         // FIX: Store Per STRIP prices (Backend expects Strip Price and divides by TPS for sales)
                         // Effective Purchase Rate per Strip (factoring in free items)
                         // Rate * Qty(Strips) / Total Strips (Qty+Free)

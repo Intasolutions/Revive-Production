@@ -80,10 +80,11 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 
             PurchaseItem.objects.create(
                 purchase=invoice, 
-                gst_percent=gst_val,
                 **item
             )
 
+            # Standard Logic: Inventory is in Tablets. 
+            # item.get('qty') is now expected to be strips from frontend, factoring in TPS.
             qty_in = ((item.get('qty') or 0) + (item.get('free_qty') or 0)) * tps
 
             # Stock match logic (MANDATORY): product_name + batch_no + expiry + supplier
