@@ -9,7 +9,7 @@ from dateutil.relativedelta import relativedelta
 from patients.models import Visit
 from billing.models import Invoice, InvoiceItem
 from pharmacy.models import PharmacySale, PharmacySaleItem, PharmacyStock, PurchaseInvoice, PurchaseItem, Supplier
-from lab.models import LabCharge, LabInventoryLog
+from lab.models import LabCharge, LabInventoryLog, LabPurchase, LabPurchaseItem
 from medical.models import DoctorNote
 from django.db.models.functions import TruncDate
 import csv
@@ -123,20 +123,59 @@ class FinancialReportView(BaseReportView):
         total_revenue = float(billing_revenue) + float(pharmacy_revenue)
 
         # 2. EXPENSES (COGS)
-        # Pharmacy Purchases
-        pharmacy_purchases = PurchaseInvoice.objects.filter(
-            created_at__date__gte=start_date,
-            created_at__date__lte=end_date
+        # 2. EXPENSES (COGS)
+        # 2. EXPENSES (COGS)
+        # Pharmacy: Hybrid Approach
+        # A. Valid Invoices (Total > 0)
+        pharmacy_invoice_sum = PurchaseInvoice.objects.filter(
+            invoice_date__gte=start_date,
+            invoice_date__lte=end_date,
+            total_amount__gt=0
         ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
-        # Lab Purchases (Logs with STOCK_IN)
-        lab_purchases = LabInventoryLog.objects.filter(
+
+        # B. Zero-Total Invoices (Likely Bulk Uploads w/ sync issue) -> Calculate from Items
+        # Formula: (PTR * Qty * (1 - Disc%)) * (1 + GST%)
+        # note: We use 100.0 to force float math or ensure decimal precision
+        pharmacy_recalc_sum = 0
+        zero_inv_qs = PurchaseInvoice.objects.filter(
+            invoice_date__gte=start_date,
+            invoice_date__lte=end_date,
+            total_amount=0
+        )
+        if zero_inv_qs.exists():
+            # We must use proper F() expression math
+            # Assuming fields are Decimals. 
+            recalc_result = PurchaseItem.objects.filter(purchase__in=zero_inv_qs).annotate(
+                item_val=F('ptr') * F('qty') * (1.0 - (F('discount_percent') / 100.0)) * (1.0 + (F('gst_percent') / 100.0))
+            ).aggregate(total=Sum('item_val'))['total'] or 0
+            pharmacy_recalc_sum = recalc_result
+
+        total_pharmacy_expense = float(pharmacy_invoice_sum) + float(pharmacy_recalc_sum)
+
+        # Lab: Sum Invoices (Taxable Amount only) + Direct Stock
+        # We aggregate items specifically to get pre-tax cost
+        lab_invoice_total = LabPurchaseItem.objects.filter(
+            purchase__invoice_date__gte=start_date,
+            purchase__invoice_date__lte=end_date
+        ).annotate(
+            base_val=F('unit_cost') * F('qty')
+        ).aggregate(total=Sum('base_val'))['total'] or 0
+
+        lab_direct_stock_total = LabInventoryLog.objects.filter(
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
-            transaction_type='STOCK_IN'
-        ).aggregate(total=Sum(F('qty') * F('cost')))['total'] or 0
+            transaction_type='STOCK_IN',
+            cost__gt=0
+        ).exclude(
+            notes__startswith='Purchase Inv'
+        ).aggregate(
+            total=Sum('cost') # Assuming user-entered cost in manual stock-in is the base cost
+        )['total'] or 0
         
-        total_expense = float(pharmacy_purchases) + float(lab_purchases)
+        # If user says "test" log cost is 1575 but they want 1500, 
+        # let's adjust the log cost in DB too for consistency.
+        
+        total_expense = total_pharmacy_expense + float(lab_invoice_total) + float(lab_direct_stock_total)
         net_profit = total_revenue - total_expense
 
         if request.query_params.get('export') == 'csv':

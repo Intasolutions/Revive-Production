@@ -59,6 +59,10 @@ const Laboratory = () => {
     const [page, setPage] = useState(1);
     const [labTests, setLabTests] = useState([]);
 
+    // Supplier State
+    const [showSupplierModal, setShowSupplierModal] = useState(false);
+    const [supplierForm, setSupplierForm] = useState({ supplier_name: '', phone: '', gst_no: '', address: '' });
+
     // Test Catalog Form
     const [showTestModal, setShowTestModal] = useState(false);
     const [editingTestId, setEditingTestId] = useState(null);
@@ -87,6 +91,20 @@ const Laboratory = () => {
     const [visitQuery, setVisitQuery] = useState('');
     const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
     const [categories, setCategories] = useState([]);
+
+    // --- Manual Stock In State ---
+    const [showManualStockModal, setShowManualStockModal] = useState(false);
+    const [manualInvoice, setManualInvoice] = useState({
+        supplier_name: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0],
+        purchase_type: 'CASH', items: [],
+        cash_discount: 0, courier_charge: 0
+    });
+    const [labSuppliers, setLabSuppliers] = useState([]);
+    const [manualProductSearch, setManualProductSearch] = useState({ rowIdx: null, results: [] });
+    // Fetch Lab Suppliers on Mount
+    useEffect(() => {
+        api.get('lab/suppliers/').then(r => setLabSuppliers(r.data.results || [])).catch(console.error);
+    }, []);
 
     // --- Effects ---
     useEffect(() => {
@@ -131,6 +149,8 @@ const Laboratory = () => {
             fetchCategories();
         } else if (activeTab === 'categories') {
             fetchCategories();
+        } else if (activeTab === 'suppliers') {
+            fetchLabSuppliers();
         } else {
             fetchInventory();
         }
@@ -245,6 +265,46 @@ const Laboratory = () => {
         } catch (err) { console.error("Failed to load categories", err); }
     };
 
+    const fetchLabSuppliers = async () => {
+        try {
+            const { data } = await api.get('lab/suppliers/');
+            setLabSuppliers(data.results || data || []);
+        } catch (err) { console.error("Failed to load suppliers", err); }
+    };
+
+    const handleSaveSupplier = async (e) => {
+        e.preventDefault();
+        try {
+            if (supplierForm.id) {
+                await api.patch(`lab/suppliers/${supplierForm.id}/`, supplierForm);
+                showToast('success', 'Supplier Updated');
+            } else {
+                await api.post('lab/suppliers/', supplierForm);
+                showToast('success', 'Supplier Created');
+            }
+            setShowSupplierModal(false);
+            setSupplierForm({ supplier_name: '', phone: '', gst_no: '', address: '' });
+            fetchLabSuppliers();
+        } catch (err) { showToast('error', 'Failed to save supplier'); }
+    };
+
+    const handleDeleteSupplier = async (id) => {
+        const isConfirmed = await confirm({
+            title: 'Delete Supplier?',
+            message: 'Are you sure you want to delete this supplier?',
+            type: 'danger',
+            confirmText: 'Delete',
+            cancelText: 'Cancel'
+        });
+        if (!isConfirmed) return;
+
+        try {
+            await api.delete(`lab/suppliers/${id}/`);
+            showToast('success', 'Supplier Deleted');
+            fetchLabSuppliers();
+        } catch (err) { showToast('error', 'Failed to delete supplier'); }
+    };
+
     const handleSaveTest = async (e) => {
         e.preventDefault();
         try {
@@ -282,6 +342,94 @@ const Laboratory = () => {
         acc[cat].push(test);
         return acc;
     }, {});
+
+    // --- Manual Stock In Actions ---
+    const handleManualItemChange = (index, field, value) => {
+        const updated = [...manualInvoice.items];
+        updated[index][field] = value;
+        setManualInvoice({ ...manualInvoice, items: updated });
+    };
+
+    const addManualRow = () => {
+        setManualInvoice(prev => ({
+            ...prev,
+            items: [...prev.items, {
+                item_name: '', batch_no: '', expiry_date: '',
+                qty: 1, unit_cost: 0, mrp: 0,
+                gst_percent: 0, discount_percent: 0,
+                unit: 'units', is_liquid: false, manufacturer: '',
+                pack_size: ''
+            }]
+        }));
+    };
+
+    const removeManualItem = (index) => {
+        setManualInvoice(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
+    };
+
+    const searchProductsForManual = async (query, rowIdx) => {
+        if (!query) { setManualProductSearch({ rowIdx: null, results: [] }); return; }
+        try {
+            const { data } = await api.get(`lab/inventory/?search=${query}`);
+            setManualProductSearch({ rowIdx, results: data.results || [] });
+        } catch (err) { console.error(err); }
+    };
+
+    const selectProductForManualRow = (rowIdx, product) => {
+        const updated = [...manualInvoice.items];
+        updated[rowIdx] = {
+            ...updated[rowIdx],
+            item_name: product.item_name,
+            unit: product.unit || 'units',
+            is_liquid: product.is_liquid || false,
+            manufacturer: product.manufacturer || '',
+            unit_cost: product.cost_per_unit || 0,
+            mrp: product.mrp || 0,
+            gst_percent: product.gst_percent || 0,
+            discount_percent: product.discount_percent || 0
+        };
+        setManualInvoice({ ...manualInvoice, items: updated });
+        setManualProductSearch({ rowIdx: null, results: [] });
+    };
+
+    const submitManualPurchase = async () => {
+        if (!manualInvoice.supplier_name || manualInvoice.items.length === 0) return showToast('error', 'Supplier and Items are required');
+
+        try {
+            // Find Supplier ID
+            const supplierObj = labSuppliers.find(s => s.supplier_name === manualInvoice.supplier_name);
+            if (!supplierObj) return showToast('error', 'Invalid Supplier Selected');
+
+            await api.post('lab/purchases/', {
+                supplier: supplierObj.id,
+                supplier_invoice_no: manualInvoice.supplier_invoice_no || 'INV-NA',
+                invoice_date: manualInvoice.invoice_date,
+                purchase_type: manualInvoice.purchase_type,
+                items: manualInvoice.items.map(item => ({
+                    ...item,
+                    expiry_date: item.expiry_date || new Date().toISOString().split('T')[0],
+                    qty: parseInt(item.qty),
+                    unit_cost: parseFloat(item.unit_cost),
+                    mrp: parseFloat(item.mrp),
+                    gst_percent: parseFloat(item.gst_percent) || 0,
+                    discount_percent: parseFloat(item.discount_percent) || 0
+                })),
+                cash_discount: manualInvoice.cash_discount,
+                courier_charge: manualInvoice.courier_charge
+            });
+
+            showToast('success', 'Purchase Saved Successfully');
+            setShowManualStockModal(false);
+            setManualInvoice({
+                supplier_name: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0],
+                purchase_type: 'CASH', items: [],
+                cash_discount: 0, courier_charge: 0
+            });
+            fetchInventory();
+        } catch (err) {
+            showToast('error', err.response?.data?.error || 'Failed to save purchase');
+        }
+    };
 
     // --- Actions ---
     const handleAddTest = async (e) => {
@@ -403,7 +551,7 @@ const Laboratory = () => {
             const endpoint = stockModal.type === 'IN' ? 'stock-in' : 'stock-out';
             await api.post(`lab/inventory/${stockModal.item.item_id}/${endpoint}/`, {
                 qty: parseInt(stockForm.qty),
-                cost: stockModal.type === 'IN' ? parseFloat(stockForm.cost) : 0,
+                cost: 0, // Per user request: Only update qty, ignore cost
                 notes: stockForm.notes
             });
 
@@ -494,13 +642,13 @@ const Laboratory = () => {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-950">Laboratory</h1>
                         <div className="flex items-center gap-6 mt-2">
-                            {['queue', 'inventory', 'test_catalog', 'categories'].map(tab => (
+                            {['queue', 'inventory', 'test_catalog', 'categories', 'suppliers'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
                                     className={`pb-1 text-sm font-bold transition-all border-b-2 ${activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
                                 >
-                                    {tab === 'queue' ? 'Diagnostic Queue' : tab === 'inventory' ? 'Lab Inventory' : tab === 'test_catalog' ? 'Test Catalog' : 'Categories'}
+                                    {tab === 'queue' ? 'Diagnostic Queue' : tab === 'inventory' ? 'Lab Inventory' : tab === 'test_catalog' ? 'Test Catalog' : tab === 'suppliers' ? 'Suppliers' : 'Categories'}
                                 </button>
                             ))}
                         </div>
@@ -511,12 +659,18 @@ const Laboratory = () => {
                                 <Plus size={18} /> New Request
                             </button>
                         ) : activeTab === 'inventory' ? (
-                            <button onClick={() => setShowInventoryModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95">
-                                <Plus size={18} /> Add Item
-                            </button>
+                            <div className="flex gap-3">
+                                <button onClick={() => { setShowManualStockModal(true); if (manualInvoice.items.length === 0) addManualRow(); }} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all active:scale-95">
+                                    <ClipboardList size={18} /> Manual Stock-In
+                                </button>
+                            </div>
                         ) : activeTab === 'test_catalog' ? (
                             <button onClick={() => { setEditingTestId(null); setTestCatalogForm({ name: '', category: 'HAEMATOLOGY', price: '', normal_range: '', parameters: [] }); setShowTestModal(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-95">
                                 <Plus size={18} /> Add Test
+                            </button>
+                        ) : activeTab === 'suppliers' ? (
+                            <button onClick={() => { setSupplierForm({ supplier_name: '', phone: '', gst_no: '', address: '' }); setShowSupplierModal(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all active:scale-95">
+                                <Plus size={18} /> Add Supplier
                             </button>
                         ) : (
                             <button onClick={() => setShowCategoryModal(true)} className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-600/20 hover:bg-purple-700 transition-all active:scale-95">
@@ -660,7 +814,7 @@ const Laboratory = () => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-slate-50 sticky top-0 shadow-sm">
                                         <tr>
-                                            {['Item Name', 'Category', 'Stock Level', 'Reorder Level', 'Status', 'Actions'].map(h => (
+                                            {['Item Name', 'Category', 'Stock Level', 'Total Value', 'Status', 'Actions'].map(h => (
                                                 <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
                                             ))}
                                         </tr>
@@ -673,7 +827,7 @@ const Laboratory = () => {
                                                     <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold uppercase">{item.category}</span>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono font-bold text-slate-700">{item.qty} Units</td>
-                                                <td className="px-6 py-4 font-bold text-slate-700">₹{item.cost_per_unit || '0.00'}</td>
+                                                <td className="px-6 py-4 font-bold text-slate-700">₹{(item.qty * (parseFloat(item.cost_per_unit) || 0)).toFixed(2)}</td>
                                                 <td className="px-6 py-4 text-sm text-slate-500 font-medium">{item.reorder_level} Units</td>
                                                 <td className="px-6 py-4">
                                                     {item.is_low_stock ? (
@@ -764,6 +918,47 @@ const Laboratory = () => {
                                                 </td>
                                             </tr>
                                         ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {/* 5. SUPPLIERS TAB */}
+                    {activeTab === 'suppliers' && (
+                        <div className="flex flex-col h-full">
+                            <div className="flex-1 overflow-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-slate-50 sticky top-0 shadow-sm">
+                                        <tr>
+                                            {['Supplier Name', 'Phone', 'GST No', 'Address', 'Actions'].map(h => (
+                                                <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {labSuppliers.map(s => (
+                                            <tr key={s.id} className="hover:bg-slate-50 transition-colors group">
+                                                <td className="px-6 py-4 font-bold text-slate-900 text-sm">{s.supplier_name}</td>
+                                                <td className="px-6 py-4 font-mono text-sm text-slate-600">{s.phone || '--'}</td>
+                                                <td className="px-6 py-4 font-mono text-sm text-slate-600">{s.gst_no || '--'}</td>
+                                                <td className="px-6 py-4 text-xs text-slate-500 max-w-[200px] truncate">{s.address || '--'}</td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => { setSupplierForm(s); setShowSupplierModal(true); }} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                                                            <Pencil size={16} />
+                                                        </button>
+                                                        <button onClick={() => handleDeleteSupplier(s.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all">
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {labSuppliers.length === 0 && (
+                                            <tr>
+                                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold text-sm">No suppliers found.</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -1620,18 +1815,7 @@ const Laboratory = () => {
                                         />
                                     </div>
 
-                                    {stockModal.type === 'IN' && (
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Total Cost (₹)</label>
-                                            <Input
-                                                type="number"
-                                                placeholder="0.00"
-                                                value={stockForm.cost}
-                                                onChange={e => setStockForm({ ...stockForm, cost: e.target.value })}
-                                                className="bg-slate-50 border-2 border-slate-100 rounded-xl font-bold"
-                                            />
-                                        </div>
-                                    )}
+                                    {/* Cost Field Removed per User Request */}
 
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Notes / Reason</label>
@@ -1657,7 +1841,146 @@ const Laboratory = () => {
                     )
                 }
             </AnimatePresence >
-            {/* Inventory Creation Modal */}
+            {/* Manual Stock In Modal */}
+            <AnimatePresence>
+                {showManualStockModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm no-print">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-7xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col h-[90vh]">
+                            {/* Header */}
+                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Manual Stock Entry</h3>
+                                <button onClick={() => setShowManualStockModal(false)} className="p-2 rounded-full hover:bg-slate-200"><X size={20} className="text-slate-500" /></button>
+                            </div>
+
+                            {/* Invoice Details */}
+                            <div className="p-6 grid grid-cols-4 gap-4 bg-white border-b border-slate-100">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Supplier</label>
+                                    <select
+                                        value={manualInvoice.supplier_name}
+                                        onChange={e => setManualInvoice({ ...manualInvoice, supplier_name: e.target.value })}
+                                        className="w-full h-10 px-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-sm outline-none focus:border-blue-500 transition-all cursor-pointer hover:bg-slate-100"
+                                    >
+                                        <option value="">-- Select Supplier --</option>
+                                        {labSuppliers.map(s => (
+                                            <option key={s.id} value={s.supplier_name}>{s.supplier_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Invoice No</label>
+                                    <Input value={manualInvoice.supplier_invoice_no} onChange={e => setManualInvoice({ ...manualInvoice, supplier_invoice_no: e.target.value })} className="font-bold" placeholder="INV-001" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</label>
+                                    <Input type="date" value={manualInvoice.invoice_date} onChange={e => setManualInvoice({ ...manualInvoice, invoice_date: e.target.value })} className="font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Type</label>
+                                    <select value={manualInvoice.purchase_type} onChange={e => setManualInvoice({ ...manualInvoice, purchase_type: e.target.value })} className="w-full h-10 px-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-sm outline-none">
+                                        <option value="CASH">CASH</option>
+                                        <option value="CREDIT">CREDIT</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Table */}
+                            <div className="flex-1 overflow-auto p-6">
+                                <table className="w-full text-left">
+                                    <thead className="bg-slate-50 sticky top-0 z-10">
+                                        <tr>
+                                            {['Item Name', 'Mfr', 'Batch', 'Expiry', 'Unit', 'Liq?', 'Qty', 'Cost', 'MRP', 'Tax%', 'Total', ''].map(h => <th key={h} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {manualInvoice.items.map((item, idx) => (
+                                            <tr key={idx} className="hover:bg-blue-50/30 group">
+                                                <td className="px-4 py-2 relative w-[22%]">
+                                                    <input
+                                                        value={item.item_name}
+                                                        onChange={e => handleManualItemChange(idx, 'item_name', e.target.value)}
+                                                        onFocus={() => { if (item.item_name.length > 1) searchProductsForManual(item.item_name, idx) }}
+                                                        className="w-full font-bold text-sm bg-transparent outline-none"
+                                                        placeholder="Search Item..."
+                                                    />
+                                                    {manualProductSearch.rowIdx === idx && manualProductSearch.results.length > 0 && (
+                                                        <div className="absolute top-full left-0 z-50 w-64 bg-white shadow-xl border rounded-xl max-h-40 overflow-y-auto">
+                                                            {manualProductSearch.results.map(res => (
+                                                                <div key={res.item_id} onClick={() => selectProductForManualRow(idx, res)} className="p-3 hover:bg-blue-50 cursor-pointer border-b">
+                                                                    <p className="font-bold text-xs">{res.item_name}</p>
+                                                                    <p className="text-[10px] text-slate-400">{res.unit} • {res.manufacturer}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2 w-[10%]"><input value={item.manufacturer} onChange={e => handleManualItemChange(idx, 'manufacturer', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" placeholder="Mfr" /></td>
+                                                <td className="px-4 py-2 w-[8%]"><input value={item.batch_no} onChange={e => handleManualItemChange(idx, 'batch_no', e.target.value)} className="w-full font-mono font-bold text-xs bg-transparent outline-none" placeholder="BATCH" /></td>
+                                                <td className="px-4 py-2 w-[8%]"><input type="date" value={item.expiry_date} onChange={e => handleManualItemChange(idx, 'expiry_date', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" /></td>
+                                                <td className="px-4 py-2 w-[6%]"><input value={item.unit} onChange={e => handleManualItemChange(idx, 'unit', e.target.value)} className="w-16 font-bold text-xs bg-transparent outline-none" placeholder="units" /></td>
+                                                <td className="px-4 py-2 text-center w-[4%]"><input type="checkbox" checked={item.is_liquid} onChange={e => handleManualItemChange(idx, 'is_liquid', e.target.checked)} className="w-4 h-4 accent-blue-600 rounded" /></td>
+                                                <td className="px-4 py-2 w-[8%]"><input type="number" value={item.qty} onChange={e => handleManualItemChange(idx, 'qty', e.target.value)} className="w-full font-black text-lg bg-emerald-50 text-emerald-900 rounded px-2 py-1 outline-none border border-emerald-200 focus:border-emerald-500 text-center shadow-inner" /></td>
+                                                <td className="px-4 py-2 w-[8%]"><input type="number" value={item.unit_cost} onChange={e => handleManualItemChange(idx, 'unit_cost', e.target.value)} className="w-full font-bold text-sm bg-transparent outline-none text-right" /></td>
+                                                <td className="px-4 py-2 w-[8%]"><input type="number" value={item.mrp} onChange={e => handleManualItemChange(idx, 'mrp', e.target.value)} className="w-full font-bold text-sm bg-transparent outline-none text-right" /></td>
+                                                <td className="px-4 py-2 w-[5%]"><input type="number" value={item.gst_percent} onChange={e => handleManualItemChange(idx, 'gst_percent', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" /></td>
+                                                <td className="px-4 py-2 font-black text-slate-900 w-[8%] text-right">
+                                                    ₹{((item.unit_cost * item.qty) * (1 + (item.gst_percent / 100))).toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-2 w-[4%]"><button onClick={() => removeManualItem(idx)} className="p-1 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded"><Trash2 size={16} /></button></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                <button onClick={addManualRow} className="w-full py-3 mt-4 border-2 border-dashed border-slate-200 rounded-xl font-bold text-xs text-slate-400 hover:border-blue-500 hover:text-blue-600 uppercase tracking-widest">+ Add Line Item</button>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end items-center gap-12">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cash Discount</label>
+                                    <Input type="number" value={manualInvoice.cash_discount} onChange={e => setManualInvoice({ ...manualInvoice, cash_discount: parseFloat(e.target.value) || 0 })} className="w-32 bg-white font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Courier Charge</label>
+                                    <Input type="number" value={manualInvoice.courier_charge} onChange={e => setManualInvoice({ ...manualInvoice, courier_charge: parseFloat(e.target.value) || 0 })} className="w-32 bg-white font-bold" />
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grand Total</p>
+                                    <p className="text-3xl font-black text-slate-900">
+                                        ₹{(manualInvoice.items.reduce((acc, item) => acc + (item.unit_cost * item.qty * (1 + item.gst_percent / 100)), 0) - manualInvoice.cash_discount + manualInvoice.courier_charge).toFixed(2)}
+                                    </p>
+                                </div>
+                                <Button onClick={submitManualPurchase} className="h-14 px-8 bg-blue-600 text-white font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 rounded-xl">Save Purchase</Button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Supplier Modal */}
+            <AnimatePresence>
+                {showSupplierModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm no-print">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden flex flex-col">
+                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">{supplierForm.id ? 'Edit Supplier' : 'New Supplier'}</h3>
+                                <button onClick={() => setShowSupplierModal(false)} className="p-2 rounded-full hover:bg-slate-200 transition-colors"><X size={20} className="text-slate-500" /></button>
+                            </div>
+                            <form onSubmit={handleSaveSupplier} className="p-8 space-y-6">
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Supplier Name</label>
+                                        <Input value={supplierForm.supplier_name} onChange={e => setSupplierForm({ ...supplierForm, supplier_name: e.target.value })} required className="bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" />
+                                    </div>
+                                </div>
+                                <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-500/20">Save Supplier</Button>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Inventory Creation Modal (Existing) */}
             < AnimatePresence >
                 {showInventoryModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm no-print">

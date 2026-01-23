@@ -5,9 +5,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models
 
 from billing.models import Invoice, InvoiceItem
-from .models import LabInventory, LabCharge, LabInventoryLog, LabTest, LabCategory
-from .serializers import LabInventorySerializer, LabChargeSerializer, LabInventoryLogSerializer, LabTestSerializer, LabCategorySerializer
-
+from .models import (
+    LabInventory, LabCharge, LabInventoryLog, LabTest, LabCategory, 
+    LabSupplier, LabPurchase, LabBatch
+)
+from .serializers import (
+    LabInventorySerializer, LabChargeSerializer, LabInventoryLogSerializer, 
+    LabTestSerializer, LabCategorySerializer, LabSupplierSerializer, LabPurchaseSerializer
+)
 
 
 class IsLabOrAdmin(permissions.BasePermission):
@@ -25,6 +30,13 @@ class LabCategoryViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
 
+class LabSupplierViewSet(viewsets.ModelViewSet):
+    queryset = LabSupplier.objects.all().order_by('supplier_name')
+    serializer_class = LabSupplierSerializer
+    permission_classes = [IsLabOrAdmin]
+    search_fields = ['supplier_name', 'phone', 'gst_no']
+
+
 class LabTestViewSet(viewsets.ModelViewSet):
     queryset = LabTest.objects.all().order_by('category', 'name')
     serializer_class = LabTestSerializer
@@ -35,14 +47,13 @@ class LabTestViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
 
-
 class LabInventoryViewSet(viewsets.ModelViewSet):
     queryset = LabInventory.objects.all().order_by('item_name')
     serializer_class = LabInventorySerializer
     permission_classes = [IsLabOrAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['item_name', 'category']
-    ordering_fields = ['qty', 'reorder_level']
+    search_fields = ['item_name', 'category', 'manufacturer']
+    ordering_fields = ['qty', 'reorder_level', 'item_name']
 
     @action(detail=False, methods=['get'], url_path='low-stock')
     def low_stock(self, request):
@@ -51,6 +62,11 @@ class LabInventoryViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='stock-in')
     def stock_in(self, request, pk=None):
+        """
+        Simple quick stock-in without invoice details.
+        Updates master qty and logs it. 
+        Note: Checks for default batch or creates a general one if needed.
+        """
         item = self.get_object()
         qty = int(request.data.get('qty', 0))
         cost = request.data.get('cost', 0)
@@ -61,6 +77,9 @@ class LabInventoryViewSet(viewsets.ModelViewSet):
 
         # Update Stock
         item.qty += qty
+        # Update cost if provided
+        if float(cost) > 0:
+            item.cost_per_unit = cost
         item.save()
 
         # Log
@@ -70,7 +89,7 @@ class LabInventoryViewSet(viewsets.ModelViewSet):
             qty=qty,
             cost=cost,
             performed_by=user,
-            notes=request.data.get('notes', '')
+            notes=request.data.get('notes', 'Quick adjustment')
         )
 
         return Response(self.get_serializer(item).data)
@@ -90,6 +109,19 @@ class LabInventoryViewSet(viewsets.ModelViewSet):
         # Update Stock
         item.qty -= qty
         item.save()
+        
+        # Deduct from batches (FIFO)
+        remaining_to_deduct = qty
+        batches = LabBatch.objects.filter(inventory_item=item, qty__gt=0).order_by('expiry_date')
+        
+        for batch in batches:
+            if remaining_to_deduct <= 0:
+                break
+            
+            deduct = min(batch.qty, remaining_to_deduct)
+            batch.qty -= deduct
+            batch.save()
+            remaining_to_deduct -= deduct
 
         # Log
         LabInventoryLog.objects.create(
@@ -97,10 +129,30 @@ class LabInventoryViewSet(viewsets.ModelViewSet):
             transaction_type='STOCK_OUT',
             qty=qty,
             performed_by=user,
-            notes=request.data.get('notes', '')
+            notes=request.data.get('notes', 'Quick adjustment')
         )
 
         return Response(self.get_serializer(item).data)
+
+
+class LabPurchaseViewSet(viewsets.ModelViewSet):
+    """
+    Handles Lab Purchases (Invoices).
+    Creation logic is handled by LabPurchaseSerializer.
+    """
+    queryset = LabPurchase.objects.all().order_by('-invoice_date', '-created_at')
+    serializer_class = LabPurchaseSerializer
+    permission_classes = [IsLabOrAdmin]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['supplier__supplier_name', 'supplier_invoice_no']
+    ordering_fields = ['invoice_date', 'total_amount']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        supplier_id = self.request.query_params.get('supplier_id')
+        if supplier_id:
+            qs = qs.filter(supplier__id=supplier_id)
+        return qs
 
 
 class LabChargeViewSet(viewsets.ModelViewSet):
@@ -132,6 +184,16 @@ class LabChargeViewSet(viewsets.ModelViewSet):
                             inv_item.qty = max(0, inv_item.qty - qty_used)
                             inv_item.save()
                             
+                            # FIFO Logic for batches
+                            remaining_to_deduct = qty_used
+                            batches = LabBatch.objects.filter(inventory_item=inv_item, qty__gt=0).order_by('expiry_date')
+                            for batch in batches:
+                                if remaining_to_deduct <= 0: break
+                                deduct = min(batch.qty, remaining_to_deduct)
+                                batch.qty -= deduct
+                                batch.save()
+                                remaining_to_deduct -= deduct
+
                             LabInventoryLog.objects.create(
                                 item=inv_item,
                                 transaction_type='STOCK_OUT',
@@ -147,9 +209,19 @@ class LabChargeViewSet(viewsets.ModelViewSet):
                             inventory_item = requirement.inventory_item
                             qty_needed = requirement.qty_per_test
                             
-                            # Deduct Stock
+                            # Deduct Stock (Master)
                             inventory_item.qty = max(0, inventory_item.qty - qty_needed)
                             inventory_item.save()
+                            
+                            # FIFO Logic for batches
+                            remaining_to_deduct = qty_needed
+                            batches = LabBatch.objects.filter(inventory_item=inventory_item, qty__gt=0).order_by('expiry_date')
+                            for batch in batches:
+                                if remaining_to_deduct <= 0: break
+                                deduct = min(batch.qty, remaining_to_deduct)
+                                batch.qty -= deduct
+                                batch.save()
+                                remaining_to_deduct -= deduct
                             
                             # Log Transaction
                             LabInventoryLog.objects.create(

@@ -120,6 +120,17 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                 stock.is_deleted = False
                 stock.save()
 
+        # Emit Socket Event for Real-time Reports
+        try:
+            from asgiref.sync import async_to_sync
+            from revive_cms.sio import sio
+            async_to_sync(sio.emit)('pharmacy_inventory_update', {
+                'invoice_id': str(invoice.id),
+                'amount': float(invoice.total_amount)
+            })
+        except Exception as e:
+            print(f"Socket emit error: {e}")
+
         return invoice
 
 

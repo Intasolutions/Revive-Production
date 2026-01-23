@@ -34,6 +34,19 @@ class InvoiceSerializer(serializers.ModelSerializer):
                 # Remove non-model fields that might be sent from frontend
                 item_data.pop('stock_deducted', None) 
                 InvoiceItem.objects.create(invoice=invoice, **item_data)
+            
+            # Emit Socket Event
+            try:
+                from asgiref.sync import async_to_sync
+                from revive_cms.sio import sio
+                async_to_sync(sio.emit)('billing_update', {
+                    'invoice_id': str(invoice.id),
+                    'amount': float(invoice.total_amount),
+                    'status': invoice.payment_status
+                })
+            except Exception as e:
+                print(f"Socket emit error: {e}")
+
             return invoice
         except Exception as e:
             print(f"Error creating invoice: {str(e)}")
@@ -55,4 +68,16 @@ class InvoiceSerializer(serializers.ModelSerializer):
                 item_data.pop('stock_deducted', None)
                 InvoiceItem.objects.create(invoice=instance, **item_data)
         
+        # Emit Socket Event
+        try:
+            from asgiref.sync import async_to_sync
+            from revive_cms.sio import sio
+            async_to_sync(sio.emit)('billing_update', {
+                'invoice_id': str(instance.id),
+                'amount': float(instance.total_amount),
+                'status': instance.payment_status
+            })
+        except Exception as e:
+            print(f"Socket emit error: {e}")
+
         return instance

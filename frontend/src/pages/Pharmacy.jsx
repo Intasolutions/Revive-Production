@@ -882,7 +882,7 @@ const Pharmacy = () => {
                                         </tr>
                                         {/* Cash Discount */}
                                         <tr>
-                                            <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Less: Cash Discount</td>
+                                            <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest"> Cash Discount</td>
                                             <td colSpan="2" className="px-4 py-2 text-right">
                                                 <input
                                                     type="number"
@@ -895,7 +895,7 @@ const Pharmacy = () => {
                                         </tr>
                                         {/* Courier Charge */}
                                         <tr>
-                                            <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Add: Courier Charge</td>
+                                            <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest"> Courier Charge</td>
                                             <td colSpan="2" className="px-4 py-2 text-right">
                                                 <input
                                                     type="number"
@@ -937,178 +937,337 @@ const Pharmacy = () => {
             {/* Manual Purchase Modal - PREMIUM UPGRADE */}
             <AnimatePresence>
                 {showManualPurchaseModal && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                        <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-white rounded-[32px] shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100">
-                            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0 bg-slate-50/50">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20"><Plus size={20} rotation={45} /></div>
-                                    <div><h2 className="text-xl font-black text-slate-900 tracking-tight">Manual Stock-In</h2><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Create New Purchase Invoice</p></div>
-                                </div>
-                                <button onClick={() => setShowManualPurchaseModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={20} /></button>
-                            </div>
-                            <div className="p-8 overflow-y-auto space-y-8">
-                                <div className="grid grid-cols-4 gap-6">
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Supplier</label>
-                                        <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" value={manualInvoice.supplier} onChange={(e) => setManualInvoice(prev => ({ ...prev, supplier: e.target.value }))}><option value="">Select Supplier...</option>{(Array.isArray(suppliers) ? suppliers : []).map(s => <option key={s.id} value={s.id}>{s.supplier_name}</option>)}</select>
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.98, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.98, y: 20 }}
+                            className="bg-[#F8FAFC] rounded-[24px] shadow-2xl w-full max-w-[99vw] h-[92vh] flex flex-col overflow-hidden border border-slate-200"
+                        >
+                            {/* 1. Header Section */}
+                            <div className="bg-white px-8 py-5 border-b border-slate-200 flex justify-between items-center shrink-0">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20">
+                                        <PackagePlus size={24} strokeWidth={2.5} />
                                     </div>
-                                    <Input label="Invoice Number" placeholder="e.g. INV-001" value={manualInvoice.supplier_invoice_no} onChange={(e) => setManualInvoice(prev => ({ ...prev, supplier_invoice_no: e.target.value }))} />
-                                    <Input label="Invoice Date" type="date" value={manualInvoice.invoice_date} onChange={(e) => setManualInvoice(prev => ({ ...prev, invoice_date: e.target.value }))} />
-                                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type</label><select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" value={manualInvoice.purchase_type} onChange={(e) => setManualInvoice(prev => ({ ...prev, purchase_type: e.target.value }))}><option value="CASH">CASH</option><option value="CREDIT">CREDIT</option></select></div>
+                                    <div>
+                                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Purchase Entry</h2>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Create New Inward Invoice</p>
+                                    </div>
                                 </div>
-                                <div className="bg-slate-900 rounded-2xl p-6 flex items-center justify-between border-b-4 border-blue-600 shadow-xl">
-                                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-600/10 text-blue-400 rounded-xl flex items-center justify-center border border-blue-400/20"><Search size={24} /></div><div><h3 className="text-white font-bold">Quick Barcode Scanning</h3><p className="text-slate-400 text-xs">Scan any product to add it instantly to the table below.</p></div></div>
-                                    <div className="w-96 relative"><Input placeholder="Scan Barcode Now..." className="bg-white/5 border-white/10 text-white placeholder:text-slate-600 h-14 pr-12 text-lg font-mono tracking-widest focus:bg-white/10 transition-all" value={scannedBarcode} onChange={(e) => setScannedBarcode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleBarcodeStockIn(e.target.value); }} autoFocus /><div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600"><CheckCircle2 size={24} /></div></div>
+
+                                {/* Invoice Meta Data Card */}
+                                <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                                    <div className="px-3">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Supplier</label>
+                                        <select
+                                            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold w-48 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                            value={manualInvoice.supplier}
+                                            onChange={(e) => setManualInvoice(prev => ({ ...prev, supplier: e.target.value }))}
+                                        >
+                                            <option value="">Select Supplier...</option>
+                                            {(Array.isArray(suppliers) ? suppliers : []).map(s => <option key={s.id} value={s.id}>{s.supplier_name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="h-8 w-px bg-slate-200"></div>
+                                    <div className="px-3">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Invoice No</label>
+                                        <input
+                                            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold w-32 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                            placeholder="INV-###"
+                                            value={manualInvoice.supplier_invoice_no}
+                                            onChange={(e) => setManualInvoice(prev => ({ ...prev, supplier_invoice_no: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div className="h-8 w-px bg-slate-200"></div>
+                                    <div className="px-3">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Date</label>
+                                        <input
+                                            type="date"
+                                            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold w-32 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                            value={manualInvoice.invoice_date}
+                                            onChange={(e) => setManualInvoice(prev => ({ ...prev, invoice_date: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div className="h-8 w-px bg-slate-200"></div>
+                                    <div className="px-3">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Type</label>
+                                        <select
+                                            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold w-24 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                            value={manualInvoice.purchase_type}
+                                            onChange={(e) => setManualInvoice(prev => ({ ...prev, purchase_type: e.target.value }))}
+                                        >
+                                            <option value="CASH">CASH</option>
+                                            <option value="CREDIT">CREDIT</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="border border-slate-200 rounded-[24px] overflow-hidden shadow-sm overflow-x-auto">
-                                    <table className="w-full text-left min-w-[1000px]">
-                                        <thead className="bg-slate-50 border-b border-slate-100">
-                                            <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                <th className="px-3 py-4 w-[180px]">Product Name</th>
-                                                <th className="px-3 py-4 w-[100px]">Batch</th>
-                                                <th className="px-3 py-4 w-[110px]">Expiry</th>
-                                                <th className="px-3 py-4 w-[70px]">HSN</th>
-                                                <th className="px-3 py-4 w-[60px]">TPS</th>
-                                                <th className="px-3 py-4 w-[60px]">Qty(Str)</th>
-                                                <th className="px-3 py-4 w-[60px]">Free</th>
-                                                <th className="px-3 py-4 bg-blue-50/50 w-[80px]">Total(Tab)</th>
-                                                <th className="px-3 py-4 text-right w-[90px]">Rate</th>
-                                                <th className="px-3 py-4 text-center w-[60px]">Disc%</th>
-                                                <th className="px-3 py-4 text-center w-[60px]">GST%</th>
-                                                <th className="px-3 py-4 text-right w-[90px]">MRP</th>
-                                                <th className="px-3 py-4 text-right bg-blue-50/50 w-[90px]">MRP(Tab)</th>
-                                                <th className="px-3 py-4 text-center w-[50px]">Act</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                            {manualInvoice.items.map((item, idx) => (
-                                                <tr key={idx} className="group hover:bg-slate-50/50 relative">
-                                                    <td className="px-3 py-3 relative">
-                                                        <input
-                                                            className="w-full bg-transparent border-none text-xs font-bold text-slate-900 outline-none p-0 focus:text-blue-600"
-                                                            placeholder="Med name..."
-                                                            value={item.product_name}
-                                                            onChange={(e) => handleManualItemChange(idx, 'product_name', e.target.value)}
-                                                            onFocus={() => { if (item.product_name.length >= 2) searchProductsForManual(item.product_name, idx); }}
-                                                        />
-                                                        {manualProductSearch.rowIdx === idx && manualProductSearch.results.length > 0 && (
-                                                            <div className="absolute top-full left-0 z-[100] w-[300px] bg-white rounded-xl shadow-2xl border border-slate-100 max-h-48 overflow-y-auto mt-2">
-                                                                {manualProductSearch.results.map(res => (
-                                                                    <div key={res.id || res.med_id} onClick={() => selectProductForManualRow(idx, res)} className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0">
-                                                                        <p className="text-xs font-bold text-slate-900">{res.name}</p>
-                                                                        <div className="flex justify-between mt-1">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase">{res.manufacturer} • {res.supplier_name || 'No Supplier'}</span>
-                                                                            <span className="text-[10px] font-black text-emerald-600">{res.qty_available} Stock</span>
+
+                                <button
+                                    onClick={() => setShowManualPurchaseModal(false)}
+                                    className="w-10 h-10 bg-slate-100 hover:bg-slate-200 hover:text-red-500 text-slate-400 rounded-xl flex items-center justify-center transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* 2. Barcode & Main Content */}
+                            <div className="flex-1 overflow-hidden flex flex-col relative">
+                                {/* Barcode Scanner Bar */}
+                                <div className="px-8 pt-6 pb-2 shrink-0">
+                                    <div className="bg-slate-900 rounded-2xl p-1 pr-1 flex items-center gap-4 shadow-xl shadow-slate-900/10">
+                                        <div className="pl-5 flex items-center gap-3 text-white">
+                                            <Search size={20} className="text-blue-400" />
+                                            <span className="font-bold text-sm tracking-wide">Barcode Scan</span>
+                                        </div>
+                                        <input
+                                            placeholder="Scan product barcode to add row instantly..."
+                                            className="flex-1 bg-slate-800 border border-slate-700 text-white placeholder:text-slate-500 h-12 rounded-xl px-4 text-sm font-mono tracking-wider focus:bg-slate-700 focus:border-blue-500 outline-none transition-all"
+                                            value={scannedBarcode}
+                                            onChange={(e) => setScannedBarcode(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') handleBarcodeStockIn(e.target.value); }}
+                                            autoFocus
+                                        />
+                                        <div className="bg-slate-800 text-slate-400 px-4 h-12 flex items-center rounded-xl text-[10px] font-bold uppercase tracking-widest border border-slate-700">
+                                            Press Enter
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Table Container */}
+                                <div className="flex-1 overflow-y-auto px-8 py-4">
+                                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-40">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                                                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                    <th className="px-4 py-4 w-[20%]">Product Details</th>
+                                                    <th className="px-4 py-4 w-[10%]">Batch Info</th>
+                                                    <th className="px-4 py-4 w-[5%] text-center">TPS</th>
+                                                    <th className="px-4 py-4 w-[8%] text-center">Qty (Str)</th>
+                                                    <th className="px-4 py-4 w-[5%] text-center">Free</th>
+                                                    <th className="px-4 py-4 w-[10%] text-right">P.Rate (Str)</th>
+                                                    <th className="px-4 py-4 w-[6%] text-center">Disc%</th>
+                                                    <th className="px-4 py-4 w-[6%] text-center">GST%</th>
+                                                    <th className="px-4 py-4 w-[10%] text-right">MRP (Str)</th>
+                                                    <th className="px-4 py-4 w-[10%] text-right bg-slate-100/50">Total</th>
+                                                    <th className="px-4 py-4 w-[5%] text-center"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {manualInvoice.items.map((item, idx) => {
+                                                    // Calculate row total for display
+                                                    const base = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
+                                                    const disc = base * ((parseFloat(item.discount_percent) || 0) / 100);
+                                                    const gst = (base - disc) * ((parseFloat(item.gst_percent) || 0) / 100);
+                                                    const rowTotal = (base - disc + gst).toFixed(2);
+
+                                                    return (
+                                                        <tr key={idx} className="group hover:bg-blue-50/30 transition-colors">
+                                                            {/* Product Name */}
+                                                            <td className="px-4 py-3 relative align-top">
+                                                                <div className="space-y-1">
+                                                                    <input
+                                                                        className="w-full bg-transparent text-sm font-bold text-slate-900 placeholder:text-slate-300 outline-none border-b border-transparent focus:border-blue-500 pb-1"
+                                                                        placeholder="Type Medicine Name..."
+                                                                        value={item.product_name}
+                                                                        onChange={(e) => handleManualItemChange(idx, 'product_name', e.target.value)}
+                                                                        onFocus={() => { if (item.product_name.length >= 2) searchProductsForManual(item.product_name, idx); }}
+                                                                    />
+                                                                    <input
+                                                                        className="w-full bg-transparent text-[10px] font-bold text-slate-400 uppercase placeholder:text-slate-300 outline-none"
+                                                                        placeholder="Manufacturer / HSN"
+                                                                        value={item.hsn} // Using HSN field for visual simplicity, mapped to Manufacturer logic if needed
+                                                                        onChange={(e) => handleManualItemChange(idx, 'hsn', e.target.value)}
+                                                                    />
+                                                                </div>
+                                                                {/* Dropdown Logic */}
+                                                                {manualProductSearch.rowIdx === idx && manualProductSearch.results.length > 0 && (
+                                                                    <div className="absolute top-full left-0 z-[100] w-[350px] bg-white rounded-xl shadow-2xl border border-slate-100 max-h-56 overflow-y-auto mt-1 ml-2">
+                                                                        {manualProductSearch.results.map(res => (
+                                                                            <div key={res.id || res.med_id} onClick={() => selectProductForManualRow(idx, res)} className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 group/item">
+                                                                                <div className="flex justify-between items-start">
+                                                                                    <p className="text-xs font-bold text-slate-900 group-hover/item:text-blue-600">{res.name}</p>
+                                                                                    <span className="text-[10px] font-black bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">{res.qty_available} Stock</span>
+                                                                                </div>
+                                                                                <div className="flex justify-between mt-1">
+                                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase">{res.manufacturer}</span>
+                                                                                    <span className="text-[10px] text-slate-500">MRP: ₹{res.mrp}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                        <div className="p-2 bg-slate-50 text-[10px] font-bold text-center text-blue-600 cursor-pointer hover:bg-slate-100 uppercase tracking-wide" onClick={() => setManualProductSearch({ rowIdx: null, results: [] })}>
+                                                                            + Create New Item
                                                                         </div>
                                                                     </div>
-                                                                ))}
-                                                                <div className="p-2 bg-slate-50 text-[10px] font-bold text-center text-blue-600 cursor-pointer hover:bg-slate-100" onClick={() => setManualProductSearch({ rowIdx: null, results: [] })}>
-                                                                    + Create New "{item.product_name}"
+                                                                )}
+                                                            </td>
+
+                                                            {/* Batch & Expiry */}
+                                                            <td className="px-4 py-3 align-top">
+                                                                <div className="space-y-1">
+                                                                    <input className="w-full bg-slate-50 rounded px-2 py-1 text-xs font-mono font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500" placeholder="BATCH" value={item.batch_no} onChange={(e) => handleManualItemChange(idx, 'batch_no', e.target.value)} />
+                                                                    <input className="w-full bg-transparent px-1 text-[10px] font-bold text-slate-500 outline-none" type="date" value={item.expiry_date} onChange={(e) => handleManualItemChange(idx, 'expiry_date', e.target.value)} />
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-3 py-3">
-                                                        <input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="BATCH" value={item.batch_no} onChange={(e) => handleManualItemChange(idx, 'batch_no', e.target.value)} />
-                                                    </td>
-                                                    <td className="px-3 py-3">
-                                                        <input className="w-full bg-transparent border-none text-[10px] text-slate-400 outline-none p-0" type="date" value={item.expiry_date} onChange={(e) => handleManualItemChange(idx, 'expiry_date', e.target.value)} />
-                                                    </td>
-                                                    <td className="px-3 py-3"><input className="w-full bg-transparent border-none text-xs font-mono text-slate-600 outline-none p-0" placeholder="HSN" value={item.hsn} onChange={(e) => handleManualItemChange(idx, 'hsn', e.target.value)} /></td>
-                                                    <td className="px-3 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} /></td>
-                                                    <td className="px-3 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.qty} onChange={(e) => handleManualItemChange(idx, 'qty', e.target.value)} /></td>
-                                                    <td className="px-3 py-3 text-center"><input className="w-full bg-transparent border-none text-xs font-bold text-center outline-none p-0 no-spinner" type="number" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} /></td>
-                                                    <td className="px-3 py-3 text-center bg-blue-50/30 text-xs font-black text-blue-600">{((parseInt(item.qty) || 0) + (parseInt(item.free_qty) || 0)) * (parseInt(item.tablets_per_strip) || 1)}</td>
-                                                    <td className="px-3 py-3 text-right">
-                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner" type="number" step="0.01" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} /></div>
-                                                        <span className="text-[9px] text-slate-400 block">@₹{((parseFloat(item.purchase_rate) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</span>
-                                                    </td>
-                                                    <td className="px-3 py-3 text-center">
-                                                        <input className="w-full bg-transparent border-dashed border-b border-slate-300 text-xs font-bold text-center text-rose-500 outline-none p-0 no-spinner focus:border-rose-500" type="number" placeholder="0%" value={item.discount_percent || ''} onChange={(e) => handleManualItemChange(idx, 'discount_percent', e.target.value)} />
-                                                    </td>
-                                                    <td className="px-3 py-3 text-center">
-                                                        <input className="w-full bg-transparent border-dashed border-b border-slate-300 text-xs font-bold text-center text-blue-600 outline-none p-0 no-spinner focus:border-blue-500" type="number" placeholder="0%" value={item.gst_percent} onChange={(e) => handleManualItemChange(idx, 'gst_percent', e.target.value)} />
-                                                    </td>
-                                                    <td className="px-3 py-3 text-right">
-                                                        <div className="flex items-center justify-end font-bold text-slate-900 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} /></div>
-                                                    </td>
-                                                    <td className="px-3 py-3 text-right bg-blue-50/30">
-                                                        <div className="flex items-center justify-end font-bold text-blue-600 text-xs">₹<input className="w-16 bg-transparent border-none text-right outline-none p-0 no-spinner font-black" type="number" step="0.01" value={item.selling_price_per_tab || ((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)} onChange={(e) => handleManualItemChange(idx, 'selling_price_per_tab', e.target.value)} /></div>
-                                                    </td>
-                                                    <td className="px-3 py-3 text-center"><button onClick={() => removeManualItem(idx)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16} /></button></td>
-                                                </tr>
-                                            ))}
-                                            {manualInvoice.items.length === 0 && (<tr><td colSpan="13" className="p-12 text-center text-slate-400 font-bold text-xs uppercase tracking-widest bg-slate-50/50">Scan or add items to begin</td></tr>)}
-                                        </tbody>
-                                        <tfoot className="bg-slate-50 border-t-2 border-slate-100">
-                                            {/* Subtotal */}
-                                            <tr>
-                                                <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item Total (Taxable + GST)</td>
-                                                <td colSpan="3" className="px-4 py-2 text-right text-sm font-bold text-slate-600">
-                                                    ₹{manualInvoice.items.reduce((acc, item) => {
-                                                        const base = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
-                                                        const discount = base * ((parseFloat(item.discount_percent) || 0) / 100);
-                                                        const taxable = base - discount;
-                                                        const gst = taxable * ((parseFloat(item.gst_percent) || 0) / 100);
-                                                        return acc + taxable + gst;
-                                                    }, 0).toFixed(2)}
-                                                </td>
-                                                <td className="px-4 py-2 text-center">
-                                                    <button onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, gst_percent: 0, discount_percent: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))} className="p-1 px-3 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 border border-blue-200 shadow-sm">+ Add Row</button>
-                                                </td>
-                                            </tr>
-                                            {/* Cash Discount */}
-                                            <tr>
-                                                <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Less: Cash Discount</td>
-                                                <td colSpan="3" className="px-4 py-2 text-right">
-                                                    <input
-                                                        type="number"
-                                                        placeholder="0"
-                                                        value={manualInvoice.cash_discount || ''}
-                                                        onChange={(e) => setManualInvoice(prev => ({ ...prev, cash_discount: parseFloat(e.target.value) || 0 }))}
-                                                        className="w-24 text-right bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500"
-                                                    />
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                            {/* Courier Charge */}
-                                            <tr>
-                                                <td colSpan="11" className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Add: Courier Charge</td>
-                                                <td colSpan="3" className="px-4 py-2 text-right">
-                                                    <input
-                                                        type="number"
-                                                        placeholder="0"
-                                                        value={manualInvoice.courier_charge || ''}
-                                                        onChange={(e) => setManualInvoice(prev => ({ ...prev, courier_charge: parseFloat(e.target.value) || 0 }))}
-                                                        className="w-24 text-right bg-white border border-slate-200 rounded px-2 py-1 text-sm font-bold outline-none focus:border-blue-500"
-                                                    />
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                            {/* Grand Total */}
-                                            <tr className="bg-slate-100">
-                                                <td colSpan="11" className="px-4 py-4 text-right text-xs font-black text-slate-900 uppercase tracking-widest">Grand Total</td>
-                                                <td colSpan="3" className="px-4 py-4 text-right">
-                                                    <div className="text-xl font-black text-blue-600">
-                                                        ₹{(manualInvoice.items.reduce((acc, item) => {
-                                                            const base = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
-                                                            const discount = base * ((parseFloat(item.discount_percent) || 0) / 100);
-                                                            const taxable = base - discount;
-                                                            const gst = taxable * ((parseFloat(item.gst_percent) || 0) / 100);
-                                                            return acc + taxable + gst;
-                                                        }, 0) - (manualInvoice.cash_discount || 0) + (manualInvoice.courier_charge || 0)).toFixed(2)}
-                                                    </div>
-                                                </td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                                                            </td>
+
+                                                            {/* TPS */}
+                                                            <td className="px-4 py-3 align-top">
+                                                                <input className="w-full bg-transparent text-center text-xs font-bold text-slate-600 outline-none border-b border-slate-100 focus:border-blue-500 pb-1" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} />
+                                                            </td>
+
+                                                            {/* Qty */}
+                                                            <td className="px-4 py-3 align-top">
+                                                                <div className="flex items-center justify-center">
+                                                                    <input className="w-16 bg-blue-50/50 rounded-lg py-1.5 text-center text-sm font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all" type="number" placeholder="0" value={item.qty} onChange={(e) => handleManualItemChange(idx, 'qty', e.target.value)} />
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Free */}
+                                                            <td className="px-4 py-3 align-top">
+                                                                <input className="w-full bg-transparent text-center text-xs font-bold text-slate-400 focus:text-emerald-600 outline-none border-b border-transparent focus:border-emerald-500 pb-1 transition-colors" type="number" placeholder="0" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} />
+                                                            </td>
+
+                                                            {/* Rate */}
+                                                            <td className="px-4 py-3 align-top text-right">
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <span className="text-xs text-slate-400">₹</span>
+                                                                    <input className="w-20 bg-transparent text-right text-sm font-bold text-slate-900 outline-none border-b border-slate-100 focus:border-blue-500 pb-1" type="number" step="0.01" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} />
+                                                                </div>
+                                                                <p className="text-[9px] text-slate-400 mt-1">PTR/Tab: ₹{((parseFloat(item.purchase_rate) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</p>
+                                                            </td>
+
+                                                            {/* Disc */}
+                                                            <td className="px-4 py-3 align-top">
+                                                                <input className="w-full bg-transparent text-center text-xs font-bold text-rose-500 outline-none border-b border-transparent focus:border-rose-500 pb-1" type="number" placeholder="0" value={item.discount_percent || ''} onChange={(e) => handleManualItemChange(idx, 'discount_percent', e.target.value)} />
+                                                            </td>
+
+                                                            {/* GST */}
+                                                            <td className="px-4 py-3 align-top">
+                                                                <select
+                                                                    className="w-full bg-transparent text-center text-xs font-bold text-slate-600 outline-none appearance-none"
+                                                                    value={item.gst_percent}
+                                                                    onChange={(e) => handleManualItemChange(idx, 'gst_percent', e.target.value)}
+                                                                >
+                                                                    <option value="0">0%</option>
+                                                                    <option value="5">5%</option>
+                                                                    <option value="12">12%</option>
+                                                                    <option value="18">18%</option>
+                                                                    <option value="28">28%</option>
+                                                                </select>
+                                                            </td>
+
+                                                            {/* MRP */}
+                                                            <td className="px-4 py-3 align-top text-right">
+                                                                <input className="w-full bg-transparent text-right text-xs font-bold text-slate-600 outline-none border-b border-transparent focus:border-slate-400 pb-1" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} />
+                                                                <p className="text-[9px] text-slate-400 mt-1">MRP/Tab: ₹{((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</p>
+                                                            </td>
+
+                                                            {/* Row Total */}
+                                                            <td className="px-4 py-3 align-top text-right bg-slate-100/30">
+                                                                <span className="text-xs font-black text-slate-900">₹{rowTotal}</span>
+                                                            </td>
+
+                                                            {/* Action */}
+                                                            <td className="px-4 py-3 align-top text-center">
+                                                                <button onClick={() => removeManualItem(idx)} className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all">
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+
+                                        {/* Empty State / Add Button Area */}
+                                        <div className="p-4 bg-slate-50 border-t border-slate-200">
+                                            <button
+                                                onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, gst_percent: 0, discount_percent: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))}
+                                                className="w-full h-12 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-widest hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-all group"
+                                            >
+                                                <Plus size={16} className="group-hover:scale-110 transition-transform" />
+                                                Add Another Item
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
-                                <Button variant="outline" onClick={() => setShowManualPurchaseModal(false)}>Cancel</Button>
-                                <Button className="bg-blue-600 hover:bg-blue-700 px-8" onClick={submitManualPurchase} loading={loading}>Save & Stock-In</Button>
+
+                            {/* 3. Footer: Calculations & Actions */}
+                            <div className="bg-white border-t border-slate-200 shrink-0 flex divide-x divide-slate-100 h-24 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] z-20">
+                                {/* Extras */}
+                                <div className="flex-1 px-6 py-4 flex items-center gap-8">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cash Discount</label>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-slate-400 font-bold">-</span>
+                                            <input
+                                                type="number"
+                                                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 w-24 text-sm font-bold text-slate-900 outline-none focus:border-rose-500"
+                                                placeholder="0.00"
+                                                value={manualInvoice.cash_discount || ''}
+                                                onChange={(e) => setManualInvoice(prev => ({ ...prev, cash_discount: parseFloat(e.target.value) || 0 }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Courier / Freight</label>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-slate-400 font-bold">+</span>
+                                            <input
+                                                type="number"
+                                                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 w-24 text-sm font-bold text-slate-900 outline-none focus:border-emerald-500"
+                                                placeholder="0.00"
+                                                value={manualInvoice.courier_charge || ''}
+                                                onChange={(e) => setManualInvoice(prev => ({ ...prev, courier_charge: parseFloat(e.target.value) || 0 }))}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Grand Total Display */}
+                                <div className="px-8 py-4 flex flex-col justify-center items-end bg-slate-50 min-w-[250px]">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Grand Total Payable</span>
+                                    <div className="text-3xl font-black text-slate-900 leading-none">
+                                        ₹{(manualInvoice.items.reduce((acc, item) => {
+                                            const base = (parseFloat(item.purchase_rate) || 0) * (parseInt(item.qty) || 0);
+                                            const discount = base * ((parseFloat(item.discount_percent) || 0) / 100);
+                                            const taxable = base - discount;
+                                            const gst = taxable * ((parseFloat(item.gst_percent) || 0) / 100);
+                                            return acc + taxable + gst;
+                                        }, 0) - (manualInvoice.cash_discount || 0) + (manualInvoice.courier_charge || 0)).toFixed(2)}
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 mt-1">{manualInvoice.items.length} Items</span>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="px-6 py-4 flex items-center gap-3">
+                                    <button
+                                        onClick={() => setShowManualPurchaseModal(false)}
+                                        className="px-6 h-14 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={submitManualPurchase}
+                                        disabled={loading}
+                                        className="px-8 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-600/40 active:scale-95 transition-all flex items-center gap-2"
+                                    >
+                                        {loading ? 'Processing...' : (
+                                            <>
+                                                <CheckCircle2 size={18} />
+                                                Save Purchase
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
+
                         </motion.div>
                     </motion.div>
                 )}

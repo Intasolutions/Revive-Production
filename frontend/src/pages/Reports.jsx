@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    TrendingUp, Calendar, Download, Users, Pill, FlaskConical, 
-    IndianRupee, Stethoscope, ClipboardList, Package, X, 
+import {
+    TrendingUp, Calendar, Download, Users, Pill, FlaskConical,
+    IndianRupee, Stethoscope, ClipboardList, Package, X,
     AlertTriangle, Import, ArrowRight, PieChart, BarChart3
 } from 'lucide-react';
 import {
@@ -10,12 +10,13 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, Button, Input, Table } from '../components/UI';
 import api from '../api/axios';
+import { socket } from '../socket';
 
 const Reports = () => {
     const [activeReport, setActiveReport] = useState('financial');
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 7) + '-01');
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedNote, setSelectedNote] = useState(null);
 
@@ -36,7 +37,28 @@ const Reports = () => {
 
     useEffect(() => {
         fetchReport();
-    }, [activeReport]);
+
+        // Real-time Listeners
+        const handleUpdate = () => {
+            fetchReport();
+        };
+
+        socket.on('lab_update', handleUpdate);
+        socket.on('pharmacy_sale_update', handleUpdate);
+        socket.on('billing_update', handleUpdate);
+        socket.on('lab_inventory_update', handleUpdate);
+        socket.on('pharmacy_inventory_update', handleUpdate);
+        socket.on('doctor_notes_update', handleUpdate);
+
+        return () => {
+            socket.off('lab_update', handleUpdate);
+            socket.off('pharmacy_sale_update', handleUpdate);
+            socket.off('billing_update', handleUpdate);
+            socket.off('lab_inventory_update', handleUpdate);
+            socket.off('pharmacy_inventory_update', handleUpdate);
+            socket.off('doctor_notes_update', handleUpdate);
+        };
+    }, [activeReport, startDate, endDate]); // Re-bind if report type or dates change
 
     const handleExport = () => {
         const url = `${import.meta.env.VITE_API_URL}reports/${activeReport}/?export=csv&start_date=${startDate}&end_date=${endDate}`;
@@ -218,7 +240,7 @@ const Reports = () => {
             </style>
 
             <div className="p-8 h-screen bg-[#F8FAFC] font-sans text-slate-900 flex flex-col overflow-hidden">
-                
+
                 {/* --- HEADER & TABS --- */}
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-8 shrink-0">
                     <div>
@@ -233,11 +255,10 @@ const Reports = () => {
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveReport(tab.id)}
-                                    className={`flex items-center gap-2 px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                                        activeReport === tab.id 
-                                        ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 scale-105' 
+                                    className={`flex items-center gap-2 px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${activeReport === tab.id
+                                        ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 scale-105'
                                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                    }`}
+                                        }`}
                                 >
                                     {tab.icon}
                                     {tab.name}
@@ -249,15 +270,15 @@ const Reports = () => {
 
                 {/* --- MAIN CONTENT GRID --- */}
                 <div className="flex-1 overflow-y-auto no-scrollbar space-y-8 pb-10">
-                    
+
                     {/* Top Row: KPI + Chart */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        
+
                         {/* 1. KPI Card */}
                         <div className="lg:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-slate-900/30 flex flex-col justify-between relative overflow-hidden group">
                             {/* Decor */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-white/10 transition-all duration-700"></div>
-                            
+
                             <div className="relative z-10">
                                 <div className="flex items-center justify-between mb-8">
                                     <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md border border-white/10">
@@ -333,12 +354,12 @@ const Reports = () => {
 
                     {/* Bottom Row: Table + Filter */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        
+
                         {/* 3. Detailed Table */}
                         <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
                                 <h3 className="font-black text-slate-900 uppercase tracking-wide text-sm flex items-center gap-2">
-                                     <ClipboardList size={16} className="text-slate-400"/> Detailed Breakdown
+                                    <ClipboardList size={16} className="text-slate-400" /> Detailed Breakdown
                                 </h3>
                                 <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm">
                                     <Download size={14} /> Export CSV
@@ -394,7 +415,7 @@ const Reports = () => {
                                 <button onClick={fetchReport} className="w-full mt-8 h-14 text-xs uppercase tracking-widest font-black bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-blue-600 hover:shadow-blue-600/30 transition-all rounded-2xl flex items-center justify-center gap-2 active:scale-95">
                                     Apply Filters <ArrowRight size={14} />
                                 </button>
-                                
+
                                 <div className="mt-6 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
                                     <p className="text-[10px] text-blue-700 font-bold leading-relaxed">
                                         💡 Analytics help you track growth. Select a range and hit Apply.
@@ -422,7 +443,7 @@ const Reports = () => {
                                         </div>
                                         <div>
                                             <h2 className="text-xl font-black text-slate-900 font-outfit uppercase tracking-tighter leading-none">Clinical Case Sheet</h2>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Ref ID: {selectedNote.id.substring(0,8)}</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Ref ID: {selectedNote.id.substring(0, 8)}</p>
                                         </div>
                                     </div>
                                     <button className="p-3 hover:bg-white rounded-full text-slate-400 hover:text-red-500 transition-all shadow-sm" onClick={() => setSelectedNote(null)}>

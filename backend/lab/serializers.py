@@ -1,12 +1,27 @@
+from django.db import transaction
 from rest_framework import serializers
-from .models import LabInventory, LabCharge, LabInventoryLog, LabTest, LabTestParameter, LabTestRequiredItem, LabCategory
+from .models import (
+    LabInventory, LabCharge, LabInventoryLog, LabTest, LabTestParameter, 
+    LabTestRequiredItem, LabCategory, LabSupplier, LabPurchase, LabPurchaseItem, LabBatch
+)
+
+
+class LabSupplierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabSupplier
+        fields = '__all__'
+
+
+class LabBatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabBatch
+        fields = '__all__'
 
 
 class LabCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = LabCategory
         fields = ['id', 'name', 'description']
-
 
 
 class LabTestParameterSerializer(serializers.ModelSerializer):
@@ -68,7 +83,6 @@ class LabTestSerializer(serializers.ModelSerializer):
         return instance
 
 
-
 class LabInventoryLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = LabInventoryLog
@@ -80,11 +94,151 @@ class LabInventorySerializer(serializers.ModelSerializer):
     item_id = serializers.UUIDField(source='id', read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
     logs = LabInventoryLogSerializer(many=True, read_only=True)
+    batches = LabBatchSerializer(many=True, read_only=True)
 
     class Meta:
         model = LabInventory
-        fields = ['item_id', 'item_name', 'category', 'qty', 'cost_per_unit', 'reorder_level', 'is_low_stock', 'logs', 'created_at', 'updated_at']
-        read_only_fields = ['item_id', 'is_low_stock', 'logs', 'created_at', 'updated_at']
+        fields = [
+            'item_id', 'item_name', 'category', 'qty', 'cost_per_unit', 'reorder_level', 
+            'is_low_stock', 'logs', 'batches',
+            'manufacturer', 'unit', 'is_liquid', 'pack_size', 
+            'gst_percent', 'discount_percent', 'hsn', 'mrp',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['item_id', 'is_low_stock', 'logs', 'batches', 'created_at', 'updated_at']
+
+
+class LabPurchaseItemSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(write_only=True) # Accepting name for creation logic
+    category = serializers.CharField(write_only=True, required=False)
+    unit = serializers.CharField(write_only=True, required=False)
+    is_liquid = serializers.BooleanField(write_only=True, required=False)
+    inventory_item_name = serializers.CharField(source='inventory_item.item_name', read_only=True)
+
+    class Meta:
+        model = LabPurchaseItem
+        fields = '__all__'
+        read_only_fields = ['purchase', 'inventory_item', 'batch', 'inventory_item_name', 'created_at', 'updated_at']
+
+
+class LabPurchaseSerializer(serializers.ModelSerializer):
+    purchase_id = serializers.UUIDField(source='id', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.supplier_name', read_only=True)
+    items = LabPurchaseItemSerializer(many=True, write_only=True)
+    items_detail = LabPurchaseItemSerializer(source='items', many=True, read_only=True)
+
+    class Meta:
+        model = LabPurchase
+        fields = '__all__'
+        read_only_fields = ['purchase_id', 'created_by', 'created_at', 'updated_at', 'total_amount', 'supplier_name']
+
+    @transaction.atomic
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        
+        # Recalculate Total (ignoring frontend total for security/accuracy)
+        total_amount = 0
+        for item in items_data:
+            rate = float(item.get('unit_cost', 0))
+            qty = int(item.get('qty', 0))
+            gst_percent = float(item.get('gst_percent', 0))
+            discount_percent = float(item.get('discount_percent', 0))
+            
+            # Formula: (Rate * Qty - Discount) + GST
+            base_cost = rate * qty
+            discount_amt = base_cost * (discount_percent / 100.0)
+            taxable = base_cost - discount_amt
+            gst_amt = taxable * (gst_percent / 100.0)
+            
+            total_amount += (taxable + gst_amt)
+            
+        # Apply Invoice Level Extra Expenses
+        cash_discount = float(validated_data.get('cash_discount', 0))
+        courier_charge = float(validated_data.get('courier_charge', 0))
+        
+        total_amount = total_amount - cash_discount + courier_charge
+        validated_data['total_amount'] = round(total_amount, 2)
+        
+        user = None
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            user = request.user
+
+        purchase = LabPurchase.objects.create(created_by=user, **validated_data)
+        
+        for item_data in items_data:
+            # Extract non-model fields or fields for Inventory creation
+            item_name = item_data.pop('item_name')
+            category = item_data.pop('category', 'General')
+            unit = item_data.pop('unit', 'units')
+            is_liquid = item_data.pop('is_liquid', False)
+            
+            # 1. Get/Create Master Inventory
+            inventory_item, created = LabInventory.objects.get_or_create(
+                item_name=item_name,
+                defaults={
+                    'category': category,
+                    'unit': unit,
+                    'is_liquid': is_liquid,
+                    'cost_per_unit': item_data.get('unit_cost', 0),
+                    'gst_percent': item_data.get('gst_percent', 0),
+                    'discount_percent': item_data.get('discount_percent', 0),
+                    'mrp': item_data.get('mrp', 0),
+                    'qty': 0 # start with 0, will add batch qty
+                }
+            )
+            
+            if not created:
+                # Update latest cost and details
+                inventory_item.cost_per_unit = item_data.get('unit_cost', inventory_item.cost_per_unit)
+                inventory_item.is_liquid = is_liquid # Ensure liquid status is updated/consistent
+                inventory_item.save()
+
+            # 2. Create Batch
+            batch = LabBatch.objects.create(
+                inventory_item=inventory_item,
+                batch_no=item_data['batch_no'],
+                expiry_date=item_data['expiry_date'],
+                qty=item_data['qty'],
+                mrp=item_data['mrp'],
+                purchase_rate=item_data['unit_cost'],
+                supplier=purchase.supplier
+            )
+
+            # 3. Create Purchase Item Log
+            LabPurchaseItem.objects.create(
+                purchase=purchase,
+                inventory_item=inventory_item,
+                batch=batch,
+                **item_data
+            )
+            
+            # 4. Update Master Inventory Qty
+            inventory_item.qty += item_data['qty']
+            inventory_item.save()
+            
+            # 5. Log Transaction
+            LabInventoryLog.objects.create(
+                item=inventory_item,
+                transaction_type='STOCK_IN',
+                qty=item_data['qty'],
+                cost=item_data.get('unit_cost', 0),
+                performed_by=user.full_name if user and hasattr(user, 'full_name') else str(user),
+                notes=f"Purchase Inv: {purchase.supplier_invoice_no}"
+            )
+
+        # Emit Socket Event for Real-time Reports
+        try:
+            from asgiref.sync import async_to_sync
+            from revive_cms.sio import sio
+            async_to_sync(sio.emit)('lab_inventory_update', {
+                'purchase_id': str(purchase.id),
+                'amount': float(purchase.total_amount)
+            })
+        except Exception as e:
+            print(f"Socket emit error: {e}")
+
+        return purchase
 
 
 class LabChargeSerializer(serializers.ModelSerializer):
