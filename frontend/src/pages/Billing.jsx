@@ -107,7 +107,7 @@ const Billing = () => {
     const fetchStats = async (showLoading = false) => {
         if (showLoading) setLoading(true);
         try {
-            const { data } = await api.get('/billing/stats/');
+            const { data } = await api.get('/billing/invoices/stats/');
             setStats(data);
         } catch (err) {
             console.error('Failed to load billing stats', err);
@@ -583,7 +583,7 @@ const Billing = () => {
                                         <p className="text-xs font-bold text-slate-500 tracking-widest mt-1">HEALTH & RESEARCH CENTRE</p>
                                         <div className="mt-4 text-xs text-slate-400 space-y-1">
                                             <p>Anjukunnn</p>
-                                            <p>Ph: 9496851538</p>
+                                            <p>Ph: +91 8547299047</p>
                                         </div>
                                     </div>
                                     <div className="text-right">

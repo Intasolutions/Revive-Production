@@ -34,7 +34,7 @@ const ReceiptTemplate = ({ sale }) => (
                 <p>Anjukunnn</p>
                 <div className="flex items-center justify-center gap-4">
                     <span>LIC: KL-WYD-159132</span>
-                    <span>PH: +91 9496851538</span>
+                    <span>PH: +91 8547299047</span>
                 </div>
             </div>
             <p className="text-[9px] font-bold border-y border-slate-200 py-1 mt-2">Tax Invoice / Retail Bill</p>
