@@ -994,7 +994,7 @@ const Laboratory = () => {
             <AnimatePresence>
                 {showTestModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/40 backdrop-blur-sm no-print">
-                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <h3 className="text-lg font-black text-emerald-900 uppercase tracking-tight">{editingTestId ? 'Edit Test' : 'Add New Test'}</h3>
                                 <button onClick={() => setShowTestModal(false)} className="p-2 rounded-full hover:bg-slate-200 transition-colors"><X size={20} className="text-slate-500" /></button>
@@ -1124,9 +1124,9 @@ const Laboratory = () => {
                                         </div>
 
                                         {testCatalogForm.required_items && testCatalogForm.required_items.length > 0 && (
-                                            <div className="grid grid-cols-[1fr,60px,30px] gap-2 px-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                            <div className="grid grid-cols-[1fr,100px,50px] gap-4 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                                 <span>Item Name</span>
-                                                <span>Qty</span>
+                                                <span className="text-center">Qty Required</span>
                                                 <span></span>
                                             </div>
                                         )}
@@ -1138,8 +1138,8 @@ const Laboratory = () => {
                                                 </div>
                                             )}
                                             {testCatalogForm.required_items && testCatalogForm.required_items.map((item, idx) => (
-                                                <div key={idx} className="flex gap-2 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                                    <div className="flex-1 relative">
+                                                <div key={idx} className="grid grid-cols-[1fr,100px,50px] gap-4 items-center animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                                    <div className="relative">
                                                         <select
                                                             value={item.inventory_item}
                                                             onChange={e => {
@@ -1147,14 +1147,14 @@ const Laboratory = () => {
                                                                 newItems[idx].inventory_item = e.target.value;
                                                                 setTestCatalogForm({ ...testCatalogForm, required_items: newItems });
                                                             }}
-                                                            className="w-full h-9 px-2 bg-slate-50 border-2 border-slate-200 rounded-lg font-bold text-xs text-slate-700 outline-none focus:border-amber-500 transition-all appearance-none"
+                                                            className="w-full h-11 px-4 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-sm text-slate-700 outline-none focus:border-amber-500 focus:bg-white transition-all appearance-none cursor-pointer"
                                                         >
                                                             <option value="">Select Item...</option>
                                                             {inventoryData.results.map(inv => (
-                                                                <option key={inv.item_id} value={inv.item_id}>{inv.item_name} ({inv.qty})</option>
+                                                                <option key={inv.item_id} value={inv.item_id}>{inv.item_name} ({inv.qty} in stock)</option>
                                                             ))}
                                                         </select>
-                                                        <ChevronRight size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" />
+                                                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                                                     </div>
                                                     <Input
                                                         type="number"
@@ -1165,7 +1165,7 @@ const Laboratory = () => {
                                                             newItems[idx].qty_per_test = parseInt(e.target.value) || 1;
                                                             setTestCatalogForm({ ...testCatalogForm, required_items: newItems });
                                                         }}
-                                                        className="w-16 bg-slate-50 border-slate-200 text-xs h-9"
+                                                        className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl font-black text-center h-11 text-amber-600 focus:border-amber-500"
                                                     />
                                                     <button
                                                         type="button"
@@ -1173,9 +1173,9 @@ const Laboratory = () => {
                                                             const newItems = testCatalogForm.required_items.filter((_, i) => i !== idx);
                                                             setTestCatalogForm({ ...testCatalogForm, required_items: newItems });
                                                         }}
-                                                        className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                                                        className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                                                     >
-                                                        <X size={14} />
+                                                        <Trash2 size={18} />
                                                     </button>
                                                 </div>
                                             ))}
