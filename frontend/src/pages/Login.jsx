@@ -139,7 +139,7 @@ const Login = () => {
                                     onFocus={() => setFocusedInput('username')}
                                     onBlur={() => setFocusedInput(null)}
                                     className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-slate-900 placeholder:text-slate-400"
-                                    placeholder="doctor@clinic.com"
+                                    placeholder="doctor@hospital.com"
                                     required
                                 />
                             </div>

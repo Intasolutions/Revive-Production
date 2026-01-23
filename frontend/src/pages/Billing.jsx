@@ -579,10 +579,10 @@ const Billing = () => {
                                 {/* Invoice Header */}
                                 <div className="flex justify-between items-start mb-12">
                                     <div>
-                                        <h1 className="text-3xl font-black text-slate-900 tracking-widest uppercase">REVIVE CLINIC</h1>
+                                        <h1 className="text-3xl font-black text-slate-900 tracking-widest uppercase">REVIVE HOSPITAL</h1>
                                         <p className="text-xs font-bold text-slate-500 tracking-widest mt-1">HEALTH & RESEARCH CENTRE</p>
                                         <div className="mt-4 text-xs text-slate-400 space-y-1">
-                                            <p>Pallikkunnu Road, Anjukunnu</p>
+                                            <p>Anjukunnn</p>
                                             <p>Ph: 9496851538</p>
                                         </div>
                                     </div>

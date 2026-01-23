@@ -1566,7 +1566,7 @@ const Laboratory = () => {
                                             <TestTube2 size={32} />
                                         </div>
                                         <div>
-                                            <h1 className="text-3xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITALS</h1>
+                                            <h1 className="text-3xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITAL</h1>
                                             <p className="text-sm font-bold text-slate-500 tracking-widest uppercase mt-1">Laboratory Services</p>
                                         </div>
                                     </div>
@@ -1707,8 +1707,9 @@ const Laboratory = () => {
                                     <TestTube2 size={32} />
                                 </div>
                                 <div>
-                                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITALS</h1>
+                                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITAL</h1>
                                     <p className="text-sm font-bold text-slate-500 tracking-widest uppercase mt-1">Laboratory Services</p>
+                                    <p className="text-xs font-bold text-slate-400 mt-1">Anjukunnn</p>
                                 </div>
                             </div>
                             <div className="text-right space-y-1">
@@ -1947,7 +1948,7 @@ const Laboratory = () => {
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grand Total</p>
                                     <p className="text-3xl font-black text-slate-900">
-                                        ₹{(manualInvoice.items.reduce((acc, item) => acc + (item.unit_cost * item.qty * (1 + item.gst_percent / 100)), 0) - manualInvoice.cash_discount + manualInvoice.courier_charge).toFixed(2)}
+                                        ₹{Math.round(manualInvoice.items.reduce((acc, item) => acc + (item.unit_cost * item.qty * (1 + item.gst_percent / 100)), 0) - manualInvoice.cash_discount + manualInvoice.courier_charge)}
                                     </p>
                                 </div>
                                 <Button onClick={submitManualPurchase} className="h-14 px-8 bg-blue-600 text-white font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 rounded-xl">Save Purchase</Button>

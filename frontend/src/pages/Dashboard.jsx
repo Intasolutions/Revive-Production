@@ -125,7 +125,7 @@ const Dashboard = () => {
                     <h1 className="text-4xl font-black text-slate-900 tracking-tight font-outfit mb-2">
                         {new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 17 ? 'Good Afternoon' : 'Good Evening'}, <span className="text-blue-600">{user?.username}</span>
                     </h1>
-                    <p className="text-slate-500 font-medium">Here's your clinic's performance overview for today.</p>
+                    <p className="text-slate-500 font-medium">Here's your hospital's performance overview for today.</p>
                 </div>
                 <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="p-2 bg-slate-100 rounded-lg text-slate-500">

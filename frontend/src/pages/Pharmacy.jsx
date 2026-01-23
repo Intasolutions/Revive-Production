@@ -29,10 +29,13 @@ const ActionTooltip = ({ text, children }) => (
 const ReceiptTemplate = ({ sale }) => (
     <div className="font-mono text-[10px] leading-relaxed uppercase text-slate-900 p-8">
         <div className="text-center space-y-1 mb-6">
-            <h1 className="text-xl font-black tracking-widest uppercase">Revive Pharmacy</h1>
-            <div className="flex items-center justify-center gap-4 text-[9px] font-bold text-slate-500">
-                <span>LIC: KL-WYD-159132</span>
-                <span>PH: +91 9496851538</span>
+            <h1 className="text-xl font-black tracking-widest uppercase">REVIVE HOSPITAL</h1>
+            <div className="flex flex-col items-center gap-1 text-[9px] font-bold text-slate-500">
+                <p>Anjukunnn</p>
+                <div className="flex items-center justify-center gap-4">
+                    <span>LIC: KL-WYD-159132</span>
+                    <span>PH: +91 9496851538</span>
+                </div>
             </div>
             <p className="text-[9px] font-bold border-y border-slate-200 py-1 mt-2">Tax Invoice / Retail Bill</p>
         </div>
@@ -65,7 +68,7 @@ const ReceiptTemplate = ({ sale }) => (
         <div className="mt-4 pt-2 border-t border-dashed border-slate-300 space-y-1 font-black">
             <div className="flex justify-end gap-8 text-lg">
                 <span>NET TOTAL:</span>
-                <span>₹{Math.ceil(sale.total_amount).toFixed(2)}</span>
+                <span>₹{Math.round(sale.total_amount)}</span>
             </div>
         </div>
 
@@ -410,7 +413,7 @@ const Pharmacy = () => {
             setLoading(false);
         }
     };
-    const calculateTotals = () => { const subtotal = cart.reduce((acc, item) => acc + (item.selling_price * item.qty), 0); return { subtotal, net: Math.ceil(subtotal) }; };
+    const calculateTotals = () => { const subtotal = cart.reduce((acc, item) => acc + (item.selling_price * item.qty), 0); return { subtotal, net: Math.round(subtotal) }; };
     useEffect(() => {
         if (cart.length > 0) {
             setCart(prevCart => prevCart.map(item => {
@@ -701,7 +704,7 @@ const Pharmacy = () => {
                                 ))}
                             </div>
                             <div className="p-6 bg-slate-50 border-t border-slate-100 space-y-4 shrink-0">
-                                <div className="space-y-2"><div className="border-t border-dashed border-slate-300 pt-2 flex justify-between items-end"><span className="text-xs font-black text-slate-900 uppercase tracking-wider">Net Payable</span><span className="text-3xl font-black text-slate-900 leading-none">₹{calculateTotals().net.toFixed(2)}</span></div></div>
+                                <div className="space-y-2"><div className="border-t border-dashed border-slate-300 pt-2 flex justify-between items-end"><span className="text-xs font-black text-slate-900 uppercase tracking-wider">Net Payable</span><span className="text-3xl font-black text-slate-900 leading-none">₹{calculateTotals().net}</span></div></div>
                                 <button onClick={handleCheckout} disabled={cart.length === 0} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-2xl font-bold shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98] flex items-center justify-center gap-2 uppercase tracking-widest text-xs"><Send size={16} /> Dispense & Send to Billing</button>
                             </div>
                         </div>
@@ -827,7 +830,7 @@ const Pharmacy = () => {
                             <div className="p-8 bg-slate-50 border-b border-slate-100">
                                 <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-black text-slate-900">Invoice #{selectedImport.invoice_no || '---'}</h2><p className="text-sm font-bold text-slate-400">Imported on {new Date(selectedImport.created_at).toLocaleDateString()}</p></div><button onClick={() => setSelectedImport(null)} className="p-2 bg-white rounded-full hover:text-red-500 shadow-sm"><X size={20} /></button></div>
                                 <div className="grid grid-cols-3 gap-4">
-                                    <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Value</p><p className="text-2xl font-black text-slate-900">₹{selectedImport.total_amount}</p></div>
+                                    <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Value</p><p className="text-2xl font-black text-slate-900">₹{Math.round(selectedImport.total_amount)}</p></div>
                                     <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Items Count</p><p className="text-2xl font-black text-emerald-600">{selectedImport.items_detail?.length || 0}</p></div>
                                     <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p><div className="flex items-center gap-2 mt-1"><CheckCircle2 size={20} className="text-blue-500" /><span className="text-lg font-bold text-slate-700">Verified</span></div></div>
                                 </div>
@@ -911,7 +914,7 @@ const Pharmacy = () => {
                                             <td colSpan="11" className="px-4 py-4 text-right text-xs font-black text-slate-900 uppercase tracking-widest">Grand Total</td>
                                             <td colSpan="2" className="px-4 py-4 text-right">
                                                 <div className="text-xl font-black text-blue-600">
-                                                    ₹{selectedImport.total_amount || 0}
+                                                    ₹{Math.round(selectedImport.total_amount || 0)}
                                                 </div>
                                             </td>
                                         </tr>
