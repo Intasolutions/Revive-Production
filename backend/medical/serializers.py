@@ -11,8 +11,18 @@ class DoctorNoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DoctorNote
-        fields = ['note_id', 'visit', 'visit_id', 'diagnosis', 'prescription', 'notes', 'lab_referral_details', 'created_by', 'created_by_name', 'created_at', 'updated_at']
+        fields = ['note_id', 'visit', 'visit_id', 'diagnosis', 'prescription', 'notes', 'lab_referral_details', 'lab_results', 'created_by', 'created_by_name', 'created_at', 'updated_at']
         read_only_fields = ['note_id', 'created_at', 'updated_at']
+
+    lab_results = serializers.SerializerMethodField()
+    
+    def get_lab_results(self, obj):
+        try:
+            return obj.visit.lab_charges.filter(status='COMPLETED').values(
+                'test_name', 'results', 'technician_name', 'report_date'
+            )
+        except:
+            return []
 
     def create(self, validated_data):
         note = super().create(validated_data)

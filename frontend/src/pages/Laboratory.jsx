@@ -758,7 +758,7 @@ const Laboratory = () => {
                                             <tr key={c.lc_id} className="hover:bg-slate-50 transition-colors group">
                                                 <td className="px-6 py-4">
                                                     <p className="font-bold text-slate-900">{c.patient_name || 'Anonymous'}</p>
-                                                    <p className="text-[10px] font-mono text-slate-400">ID: {(c.visit_id || '').slice(0, 6)}</p>
+                                                    <p className="text-[10px] font-mono text-slate-400">Reg No: {c.registration_number || 'N/A'}</p>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
@@ -1731,8 +1731,8 @@ const Laboratory = () => {
                                 </div>
                             </div>
                             <div className="text-right space-y-1">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Report ID</p>
-                                <p className="text-xl font-black text-slate-900">#{printCharge.lc_id.toString().slice(0, 8)}</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Reg No</p>
+                                <p className="text-xl font-black text-slate-900">#{printCharge.registration_number || 'N/A'}</p>
                                 <p className="text-sm font-medium text-slate-500">{new Date().toLocaleDateString()}</p>
                             </div>
                         </div>

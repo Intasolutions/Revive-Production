@@ -44,19 +44,21 @@ class VisitSerializer(serializers.ModelSerializer):
     consultation_fee = serializers.SerializerMethodField()
     patient_age = serializers.IntegerField(source='patient.age', read_only=True)
     patient_gender = serializers.CharField(source='patient.gender', read_only=True)
+    patient_registration_number = serializers.CharField(source='patient.registration_number', read_only=True)
 
     class Meta:
         model = Visit
         fields = [
             'id', 'v_id', 'patient', 'patient_name', 'doctor', 'doctor_name', 'consultation_fee', 'assigned_role',
-            'status', 'vitals', 'prescription', 'lab_referral_details', 'pharmacy_items', 'lab_results', 
+            'status', 'vitals', 'prescription', 'lab_referral_details', 'pharmacy_items', 'lab_results', 'lab_charges_data',
             'casualty_medicines', 'casualty_services', 'casualty_observations',
-            'patient_age', 'patient_gender', 'created_at', 'updated_at'
+            'patient_age', 'patient_gender', 'patient_registration_number', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'v_id', 'created_at', 'updated_at']
 
     prescription = serializers.SerializerMethodField()
     lab_referral_details = serializers.SerializerMethodField()
+    lab_charges_data = serializers.SerializerMethodField()
     pharmacy_items = serializers.SerializerMethodField()
     lab_results = serializers.SerializerMethodField()
     casualty_medicines = serializers.SerializerMethodField()
@@ -181,6 +183,21 @@ class VisitSerializer(serializers.ModelSerializer):
                     "date": c.report_date
                 })
             return results
+        except:
+            return []
+
+    def get_lab_charges_data(self, obj):
+        # Return simplified list of lab charges for billing
+        try:
+            charges = obj.lab_charges.all()
+            data = []
+            for c in charges:
+                data.append({
+                    "test_name": c.test_name,
+                    "amount": c.amount,
+                    "status": c.status
+                })
+            return data
         except:
             return []
 

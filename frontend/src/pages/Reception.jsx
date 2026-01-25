@@ -251,7 +251,11 @@ const Reception = () => {
             showToast('success', 'New patient registered successfully!');
         } catch (err) {
             console.error(err);
-            showToast('error', 'Registration failed. Please check network connection.');
+            if (err.response && err.response.data && err.response.data.registration_number) {
+                showToast('error', 'Registration Number already exists. Please use a unique ID.');
+            } else {
+                showToast('error', 'Registration failed. Please check network connection.');
+            }
         }
     };
 

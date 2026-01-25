@@ -355,11 +355,15 @@ class PharmacyStockViewSet(viewsets.ModelViewSet):
 
         results = []
         for item in qs:
+            # Fetch latest stock details for pricing
+            latest = PharmacyStock.objects.filter(name=item['name'], is_deleted=False).order_by('-expiry_date').first()
             results.append({
                 # Use name as ID to unique key it in frontend lists
                 'id': item['name'],
                 'name': item['name'],
-                'qty_available': item['total_qty'] or 0
+                'qty_available': item['total_qty'] or 0,
+                'mrp': latest.mrp if latest else 0,
+                'tablets_per_strip': latest.tablets_per_strip if latest else 1
             })
         
         return Response(results)
@@ -448,10 +452,10 @@ class PharmacyQueueViewSet(viewsets.ReadOnlyModelViewSet):
     def dispense(self, request, pk=None):
         visit = self.get_object()
         
-        # Mark as CLOSED so it shows up in billing "Ready for Billing"
-        # And maybe change assigned role to RECEPTION or NULL
-        visit.status = 'CLOSED'
-        visit.assigned_role = 'RECEPTION' # Hand off to reception for billing
+        # Mark as OPEN so it shows up in billing "Ready for Billing"
+        # And change assigned role to BILLING
+        visit.status = 'OPEN'
+        visit.assigned_role = 'BILLING' 
         visit.save()
         
         return Response({"status": "Dispensed and sent to Billing"}, status=status.HTTP_200_OK)

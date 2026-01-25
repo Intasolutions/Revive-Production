@@ -30,6 +30,7 @@ const Billing = () => {
     const [doctors, setDoctors] = useState([]);
     const [patients, setPatients] = useState([]);
     const [pharmacyStock, setPharmacyStock] = useState([]);
+    const [serviceDefinitions, setServiceDefinitions] = useState([]); // New state for services
     const [selectedPatientId, setSelectedPatientId] = useState(null);
     const [stockSearch, setStockSearch] = useState({ index: -1, term: "" });
 
@@ -119,14 +120,16 @@ const Billing = () => {
 
     const fetchMetadata = async () => {
         try {
-            const [docRes, patRes, stockRes] = await Promise.all([
+            const [docRes, patRes, stockRes, svcRes] = await Promise.all([
                 api.get(`users/management/doctors/`),
                 api.get(`reception/patients/`),
-                api.get(`pharmacy/stock/`)
+                api.get(`pharmacy/stock/`),
+                api.get(`casualty/service-definitions/`)
             ]);
             setDoctors(Array.isArray(docRes.data) ? docRes.data : docRes.data.results);
             setPatients(Array.isArray(patRes.data) ? patRes.data : patRes.data.results);
             setPharmacyStock(Array.isArray(stockRes.data) ? stockRes.data : stockRes.data.results);
+            setServiceDefinitions(Array.isArray(svcRes.data) ? svcRes.data : svcRes.data.results);
         } catch (err) { console.error(err); }
     };
 
@@ -180,11 +183,18 @@ const Billing = () => {
             visit: visit.id || visit.v_id,
             doctor: doctorToSet,
             payment_status: "PENDING",
+            registration_number: (visit.patient && visit.patient.registration_number) || (patientObj && patientObj.registration_number) || "N/A",
             items: []
         }
 
         const isPharmacyVisit = visit.vitals && visit.vitals.note === 'Auto-created from Pharmacy Manual Sale';
-        if (visit.doctor_name && visit.doctor_name !== "Not Assigned" && !isPharmacyVisit && visit.doctor) {
+        // Only add Consultation Fee if:
+        // 1. Doctor is assigned AND
+        // 2. It is NOT purely a Casualty visit (unless they saw a doctor explicitly)
+        // 3. It is NOT a direct Lab referral from Casualty
+        const isCasualtyDirectLab = visit.assigned_role === 'LAB' && (visit.casualty_services?.length > 0 || visit.casualty_medicines?.length > 0);
+
+        if (visit.doctor_name && visit.doctor_name !== "Not Assigned" && !isPharmacyVisit && visit.doctor && !isCasualtyDirectLab) {
             const fee = visit.consultation_fee ? parseFloat(visit.consultation_fee) : 500;
             newFormData.items.push({ dept: "CONSULTATION", description: "General Consultation Fee", qty: 1, unit_price: fee, amount: fee, hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: "" });
         }
@@ -202,7 +212,6 @@ const Billing = () => {
                 newFormData.items.push({
                     dept: "PHARMACY", description: item.name, qty: item.qty, unit_price: parseFloat(item.unit_price), amount: parseFloat(item.amount),
                     hsn: item.hsn || "", batch: item.batch || "", gst_percent: item.gst || 0, expiry: "", dosage: item.dosage || "", duration: item.duration || "",
-                    hsn: item.hsn || "", batch: item.batch || "", gst_percent: item.gst || 0, expiry: "", dosage: item.dosage || "", duration: "",
                     stock_deducted: true,
                     deducted_qty: item.qty
                 });
@@ -233,19 +242,40 @@ const Billing = () => {
         if (visit.casualty_observations && visit.casualty_observations.length > 0) {
             visit.casualty_observations.forEach(obs => {
                 if (obs.is_active || obs.end_time) {
-                    const hours = (obs.planned_duration_minutes / 60).toFixed(1);
-                    const chargePerHr = 500; // Hardcoded or fetch from settings? Using 500 as per init.
-                    const obsAmount = Math.ceil(hours * chargePerHr);
+                    // Logic: If active, calculate up to NOW. If ended, use stored duration or end_time - start_time
+                    let durationMinutes = obs.planned_duration_minutes; // Fallback to planned
+
+                    if (obs.start_time) {
+                        const start = new Date(obs.start_time);
+                        const end = obs.end_time ? new Date(obs.end_time) : new Date();
+                        durationMinutes = Math.max(Math.ceil((end - start) / 60000), 60); // Minimum 1 hour charge
+                    }
+
+                    const hours = (durationMinutes / 60).toFixed(1);
+
+                    // Look for configured rate
+                    const obsService = serviceDefinitions.find(s => s.name.toLowerCase().includes('observation'));
+                    const chargePerHr = obsService ? parseFloat(obsService.base_charge) : 500;
+
+                    const obsAmount = Math.ceil(parseFloat(hours) * chargePerHr);
+
                     newFormData.items.push({
-                        dept: "CASUALTY", description: `Observation Charges (${hours} hrs)`, qty: 1, unit_price: obsAmount, amount: obsAmount,
+                        dept: "CASUALTY", description: `Observation Charges (${hours} hrs @ ₹${chargePerHr}/hr)`, qty: 1, unit_price: obsAmount, amount: obsAmount,
                         hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: ""
                     });
                 }
             });
         }
 
-        if (newFormData.items.length === 0) {
-            newFormData.items.push({ dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: "" });
+        if (visit.lab_charges_data && visit.lab_charges_data.length > 0) {
+            visit.lab_charges_data.forEach(item => {
+                if (item.status !== 'CANCELLED' && parseFloat(item.amount) > 0) {
+                    newFormData.items.push({
+                        dept: "LAB", description: item.test_name, qty: 1, unit_price: parseFloat(item.amount), amount: parseFloat(item.amount),
+                        hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: ""
+                    });
+                }
+            });
         }
 
         setFormData(newFormData);
@@ -486,6 +516,7 @@ const Billing = () => {
                 doctor: invoice.doctor || (visitData ? visitData.doctor : ""),
                 doctor_display_name: invoice.doctor_display_name || (visitData ? visitData.doctor_name : "") || "Not Assigned",
                 payment_status: invoice.payment_status,
+                registration_number: invoice.registration_number || (visitData && visitData.patient ? visitData.patient.registration_number : "") || "N/A",
                 items: [...baseItems.map(i => ({ ...i, stock_deducted: true })), ...uniquePharmacyItems, ...visitCasualtyMedicines, ...visitCasualtyServices]
             });
 
@@ -767,7 +798,7 @@ const Billing = () => {
                                             </div>
                                         )}
                                         <div className="text-lg font-bold text-slate-900">{formData.patient_name || "Unknown Patient"}</div>
-                                        <div className="text-xs text-slate-500 mt-1">Patient ID: {selectedPatientId || 'N/A'}</div>
+                                        <div className="text-xs text-slate-500 mt-1">Reg No: {formData.registration_number || 'N/A'}</div>
                                     </div>
                                     <div className="text-right">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Doctor</label>
@@ -780,13 +811,15 @@ const Billing = () => {
                                     <table className="w-full text-left text-sm">
                                         <thead className="border-b-2 border-slate-900">
                                             <tr>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16">#</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-10">#</th>
                                                 <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest">Description</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center">Qty</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center">GST %</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-32 text-right">Price</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-32 text-right">Amount</th>
-                                                <th className="py-3 w-10 no-print"></th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center">Dosage</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center">Duration</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center">Qty</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center">GST %</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-right">Price</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-right">Amount</th>
+                                                <th className="py-3 w-8 no-print"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -841,6 +874,28 @@ const Billing = () => {
                                                     </td>
                                                     <td className="py-4 text-center">
                                                         <input
+                                                            className="w-full bg-transparent text-center font-medium outline-none text-slate-500 text-xs"
+                                                            value={item.dosage || ''}
+                                                            onChange={(e) => {
+                                                                const newItems = [...formData.items];
+                                                                newItems[idx] = { ...item, dosage: e.target.value };
+                                                                setFormData({ ...formData, items: newItems });
+                                                            }}
+                                                        />
+                                                    </td>
+                                                    <td className="py-4 text-center">
+                                                        <input
+                                                            className="w-full bg-transparent text-center font-medium outline-none text-slate-500 text-xs"
+                                                            value={item.duration || ''}
+                                                            onChange={(e) => {
+                                                                const newItems = [...formData.items];
+                                                                newItems[idx] = { ...item, duration: e.target.value };
+                                                                setFormData({ ...formData, items: newItems });
+                                                            }}
+                                                        />
+                                                    </td>
+                                                    <td className="py-4 text-center">
+                                                        <input
                                                             type="number" className="w-full bg-transparent text-center font-bold outline-none"
                                                             value={item.qty}
                                                             onChange={(e) => {
@@ -888,7 +943,7 @@ const Billing = () => {
                                         </tbody>
                                     </table>
                                     <button
-                                        onClick={() => setFormData(prev => ({ ...prev, items: [...prev.items, { dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0 }] }))}
+                                        onClick={() => setFormData(prev => ({ ...prev, items: [...prev.items, { dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, dosage: "", duration: "" }] }))}
                                         className="mt-4 text-xs font-bold text-blue-600 hover:underline uppercase tracking-wide no-print flex items-center gap-1"
                                     >
                                         <Plus size={12} /> Add Item Line

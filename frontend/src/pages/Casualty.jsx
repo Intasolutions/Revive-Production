@@ -10,12 +10,12 @@ import { useToast } from '../context/ToastContext';
 import { socket } from '../socket';
 
 // --- Premium Triage Modal ---
-const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [], serviceDefinitions = [], readOnly = false, initialTab = 'TRIAGE' }) => {
+const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [], serviceDefinitions = [], readOnly = false, initialTab = 'TRIAGE', draft, onDraftUpdate }) => {
     const [activeTab, setActiveTab] = useState(initialTab);
     const [formData, setFormData] = useState({
         vitals: { bp: '', temp: '', pulse: '', spo2: '', weight: '' },
         treatment_notes: '',
-        transfer_path: 'REFER_DOCTOR',
+        transfer_path: '',
         doctor: '',
         medicines: [],
         services: [],
@@ -28,15 +28,27 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
 
     useEffect(() => {
         if (visit) {
-            setFormData(prev => ({
-                ...prev,
-                vitals: { ...visit.vitals, weight: visit.vitals?.weight || '' } || { bp: '', temp: '', pulse: '', spo2: '', weight: '' },
-                treatment_notes: visit.treatment_notes || '',
-                doctor: visit.doctor || ''
-            }));
-            fetchVisitCasualtyData(visit.id || visit.v_id);
+            if (draft) {
+                setFormData(draft);
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    vitals: { ...visit.vitals, weight: visit.vitals?.weight || '' } || { bp: '', temp: '', pulse: '', spo2: '', weight: '' },
+                    treatment_notes: visit.treatment_notes || '',
+                    doctor: visit.doctor || ''
+                }));
+                fetchVisitCasualtyData(visit.id || visit.v_id);
+            }
         }
-    }, [visit]);
+    }, [visit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sync draft changes
+    useEffect(() => {
+        if (!readOnly && onDraftUpdate) {
+            const timer = setTimeout(() => onDraftUpdate(formData), 500); // Debounce
+            return () => clearTimeout(timer);
+        }
+    }, [formData, readOnly]);
 
     const fetchVisitCasualtyData = async (visitId) => {
         try {
@@ -103,6 +115,11 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
         //     return;
         // }
 
+        if (formData.transfer_path === 'REFER_DOCTOR' && !formData.doctor) {
+            setError('Please select a doctor to proceed with consultation.');
+            return;
+        }
+
         setError(null);
         const success = await onSave(visit.id || visit.v_id, formData);
         if (success) onClose();
@@ -132,7 +149,7 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
                                 {visit.patient_gender ? ` / ${visit.patient_gender}` : ''}
                             </span>
                             <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                            <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">ID: {(visit.v_id || visit.id)?.slice(0, 8)}</span>
+                            <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">ID: {visit.patient_registration_number || (visit.v_id || visit.id)?.slice(0, 8)}</span>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 bg-white rounded-full hover:bg-red-50 hover:text-red-500 transition-colors shadow-sm border border-slate-100"><X size={20} /></button>
@@ -186,16 +203,23 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {[
                                     { val: 'REFER_DOCTOR', label: 'Consult Doctor', desc: 'Proceed to OP.', icon: Stethoscope },
-                                    { val: 'REFER_LAB', label: 'Lab Investigation', desc: 'Tests required.', icon: Activity }
+                                    { val: 'REFER_LAB', label: 'Lab Investigation', desc: 'Tests required.', icon: Activity },
+                                    { val: 'REFER_BILLING', label: 'Discharge & Bill', desc: 'Send to Billing.', icon: FileText }
                                 ].map(opt => (
-                                    <label key={opt.val} className={`p-4 rounded-2xl border-2 flex items-center gap-4 transition-all ${formData.transfer_path === opt.val ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-100'} ${readOnly ? 'opacity-70 pointer-events-none' : 'cursor-pointer hover:bg-slate-50'}`}>
-                                        <input disabled={readOnly} type="radio" className="hidden" value={opt.val} checked={formData.transfer_path === opt.val} onChange={e => setFormData({ ...formData, transfer_path: e.target.value })} />
+                                    <div key={opt.val}
+                                        onClick={() => {
+                                            if (!readOnly) {
+                                                setFormData({ ...formData, transfer_path: formData.transfer_path === opt.val ? '' : opt.val });
+                                            }
+                                        }}
+                                        className={`p-4 rounded-2xl border-2 flex items-center gap-4 transition-all ${formData.transfer_path === opt.val ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-100'} ${readOnly ? 'opacity-70 pointer-events-none' : 'cursor-pointer hover:bg-slate-50'}`}
+                                    >
                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${formData.transfer_path === opt.val ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}><opt.icon size={20} /></div>
                                         <div>
                                             <div className="font-black text-sm text-slate-700">{opt.label}</div>
                                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{opt.desc}</div>
                                         </div>
-                                    </label>
+                                    </div>
                                 ))}
                             </div>
 
@@ -541,6 +565,9 @@ const CasualtyPage = () => {
     const [initialModalTab, setInitialModalTab] = useState('TRIAGE');
     const [showManageServices, setShowManageServices] = useState(false);
 
+    // Draft Persistence
+    const [drafts, setDrafts] = useState({});
+
     // History View State
     const [viewMode, setViewMode] = useState('QUEUE'); // 'QUEUE' or 'HISTORY'
     const [history, setHistory] = useState([]);
@@ -758,20 +785,35 @@ const CasualtyPage = () => {
             }
 
             // 4. Observation Management
-            // 4. Observation Management
+            // If user is transferring (Discharging/Referring), we MUST end the observation automatically
+            if (data.transfer_path && data.observation.is_active) {
+                data.observation.is_active = false;
+                // We will update it in backend below as inactive
+            }
+
             if (data.observation.id) {
                 // If we are finishing observation (is_active=false), let's be safe and close ALL active ones for this visit
                 // This handles edge cases where multiple active observations were created due to race conditions/bugs
                 if (!data.observation.is_active) {
-                    const activeObsRes = await api.get(`/casualty/observations/?visit=${visitId}&is_active=true`);
-                    const activeObsList = activeObsRes.data.results || activeObsRes.data || [];
+                    // 1. Explicitly close the CURRENT active observation ID we know about
+                    await api.patch(`/casualty/observations/${data.observation.id}/`, {
+                        is_active: false,
+                        end_time: new Date().toISOString()
+                    });
 
-                    for (const obs of activeObsList) {
-                        await api.patch(`/casualty/observations/${obs.id}/`, {
-                            is_active: false,
-                            end_time: new Date().toISOString()
-                        });
-                    }
+                    // 2. Safety check: close ANY other active ones (zombies)
+                    try {
+                        const activeObsRes = await api.get(`/casualty/observations/?visit=${visitId}&is_active=true`);
+                        const activeObsList = activeObsRes.data.results || activeObsRes.data || [];
+                        for (const obs of activeObsList) {
+                            if (obs.id !== data.observation.id) { // Don't patch the same one twice
+                                await api.patch(`/casualty/observations/${obs.id}/`, {
+                                    is_active: false,
+                                    end_time: new Date().toISOString()
+                                });
+                            }
+                        }
+                    } catch (e) { console.warn("Safety cleanup failed", e); }
                 } else {
                     // Normal update
                     await api.patch(`/casualty/observations/${data.observation.id}/`, data.observation);
@@ -798,6 +840,8 @@ const CasualtyPage = () => {
                     updatePayload = { ...updatePayload, assigned_role: 'DOCTOR', status: 'OPEN', doctor: data.doctor || null };
                 } else if (data.transfer_path === 'REFER_LAB') {
                     updatePayload = { ...updatePayload, assigned_role: 'LAB', status: 'OPEN' };
+                } else if (data.transfer_path === 'REFER_BILLING') {
+                    updatePayload = { ...updatePayload, assigned_role: 'BILLING', status: 'OPEN' };
                 }
             }
 
@@ -805,6 +849,16 @@ const CasualtyPage = () => {
             showToast('success', 'Patient updated successfully');
             fetchQueue();
             fetchStats();
+            fetchQueue();
+            fetchStats();
+
+            // Clear draft on successful save
+            setDrafts(prev => {
+                const newDrafts = { ...prev };
+                delete newDrafts[visitId];
+                return newDrafts;
+            });
+
             return true;
         } catch (err) {
             console.error(err);
@@ -935,7 +989,7 @@ const CasualtyPage = () => {
                                                     <div>
                                                         <p className="font-bold text-slate-900">{visit.patient_name}</p>
                                                         <p className="text-xs text-slate-500 font-mono flex items-center gap-1">
-                                                            ID: {visit.v_id?.slice(0, 8)}
+                                                            ID: {visit.patient_registration_number || visit.v_id?.slice(0, 8)}
                                                             {(visit.patient_age || visit.patient_gender) && (
                                                                 <>
                                                                     <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
@@ -1052,6 +1106,8 @@ const CasualtyPage = () => {
                         serviceDefinitions={serviceDefinitions}
                         readOnly={viewMode === 'HISTORY'}
                         initialTab={initialModalTab}
+                        draft={drafts[selectedVisit.id]}
+                        onDraftUpdate={(data) => setDrafts(prev => ({ ...prev, [selectedVisit.id]: data }))}
                     />
                 )}
                 {showManageServices && (

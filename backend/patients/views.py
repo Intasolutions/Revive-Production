@@ -50,9 +50,9 @@ class PatientViewSet(viewsets.ModelViewSet):
         if not phone:
             return Response({"phone": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
 
-        existing = Patient.objects.filter(phone=phone).first()
-        if existing:
-            return Response(PatientSerializer(existing).data, status=status.HTTP_200_OK)
+        # existing = Patient.objects.filter(phone=phone).first()
+        # if existing:
+        #     return Response(PatientSerializer(existing).data, status=status.HTTP_200_OK)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -73,7 +73,7 @@ class VisitViewSet(viewsets.ModelViewSet):
         'status': ['exact', 'in'],
         'patient': ['exact'], 
         'doctor': ['exact'],
-        'assigned_role': ['exact']
+        'assigned_role': ['exact', 'in']
     }
     search_fields = ['patient__full_name', 'patient__phone']
     ordering_fields = ['created_at', 'updated_at']

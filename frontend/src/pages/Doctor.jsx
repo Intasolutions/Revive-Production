@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Stethoscope, ClipboardList, Send, User, Activity, X, Search,
     Plus, FileText, Trash2, ChevronRight, Clock, Pill,
-    CalendarDays, History, CheckCircle2, AlertCircle, Sparkles, FlaskConical
+    CalendarDays, History, CheckCircle2, AlertCircle, Sparkles, FlaskConical,
+    Thermometer, Heart, Wind, Scale
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSearch } from '../context/SearchContext';
@@ -36,7 +37,7 @@ const HistoryModal = ({ history, onClose }) => {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="relative bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+                className="relative bg-white w-full max-w-3xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
                 <div className="px-8 py-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <div>
@@ -72,25 +73,99 @@ const HistoryModal = ({ history, onClose }) => {
                                 <div className="p-1.5 bg-emerald-100 rounded-lg text-emerald-600"><Pill size={16} /></div>
                                 Prescribed Medication
                             </div>
-                            <div className="grid gap-3">
-                                {Object.entries(history.prescription).map(([med, details]) => (
-                                    <div key={med} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl bg-white shadow-sm">
-                                        <span className="font-bold text-slate-900">{med}</span>
-                                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded">{details}</span>
+                            <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-50 border-b border-slate-200">
+                                        <tr>
+                                            <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px] tracking-wider">Medicine</th>
+                                            <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px] tracking-wider">Dosage</th>
+                                            <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px] tracking-wider">Duration</th>
+                                            <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px] tracking-wider text-right">Qty</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {Object.entries(history.prescription).map(([med, details]) => {
+                                            // Ensure details is a string before splitting
+                                            const detailsStr = typeof details === 'string' ? details : '';
+                                            const parts = detailsStr.split(' | ');
+                                            const dosage = parts[0] || '--';
+                                            const duration = parts[1] || '--';
+                                            const qty = parts[2] ? parts[2].replace('Qty: ', '') : '--';
+
+                                            return (
+                                                <tr key={med} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-4 py-3 font-bold text-slate-900">{med}</td>
+                                                    <td className="px-4 py-3 text-slate-600 font-medium">{dosage}</td>
+                                                    <td className="px-4 py-3 text-slate-600 font-medium">{duration}</td>
+                                                    <td className="px-4 py-3 text-slate-900 font-bold text-right">{qty}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Lab Reports (Completed) */}
+                    {history.lab_results && history.lab_results.length > 0 && (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                                <div className="p-1.5 bg-purple-100 rounded-lg text-purple-600"><FlaskConical size={16} /></div>
+                                Lab Reports
+                            </div>
+                            <div className="grid gap-4">
+                                {history.lab_results.map((report, idx) => (
+                                    <div key={idx} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 flex justify-between items-center">
+                                            <div>
+                                                <p className="font-bold text-slate-900 text-sm">{report.test_name}</p>
+                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Technician: {report.technician_name}</p>
+                                            </div>
+                                            <span className="text-xs font-mono text-slate-400">{new Date(report.report_date).toLocaleDateString()}</span>
+                                        </div>
+                                        <div className="p-4">
+                                            {Array.isArray(report.results) ? (
+                                                <table className="w-full text-sm text-left">
+                                                    <thead className="text-[10px] text-slate-400 uppercase font-bold bg-slate-50/50">
+                                                        <tr>
+                                                            <th className="px-3 py-2">Parameter</th>
+                                                            <th className="px-3 py-2">Result</th>
+                                                            <th className="px-3 py-2">Unit</th>
+                                                            <th className="px-3 py-2">Ref. Range</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {report.results.map((res, rIdx) => (
+                                                            <tr key={rIdx}>
+                                                                <td className="px-3 py-2 font-medium text-slate-700">{res.name}</td>
+                                                                <td className="px-3 py-2 font-bold text-slate-900">{res.value}</td>
+                                                                <td className="px-3 py-2 text-slate-500">{res.unit}</td>
+                                                                <td className="px-3 py-2 text-slate-400 text-xs">{res.normal}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            ) : (
+                                                <pre className="text-xs font-mono text-slate-700 bg-slate-50 p-3 rounded-lg overflow-auto">
+                                                    {JSON.stringify(report.results, null, 2)}
+                                                </pre>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* Lab Details */}
-                    {history.lab_referral_details && (
+                    {/* Verification / Old Lab Requests (Fallback) */}
+                    {!history.lab_results?.length && history.lab_referral_details && (
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                                <div className="p-1.5 bg-purple-100 rounded-lg text-purple-600"><ClipboardList size={16} /></div>
-                                Lab Requirements
+                                <div className="p-1.5 bg-slate-100 rounded-lg text-slate-600"><ClipboardList size={16} /></div>
+                                Lab Requests (Pending/No Results)
                             </div>
-                            <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 text-purple-900 text-sm font-medium">
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-slate-600 text-sm font-medium italic">
                                 {history.lab_referral_details}
                             </div>
                         </div>
@@ -216,7 +291,7 @@ const Doctor = () => {
         if (showLoading) setLoading(true);
         try {
             const doctorFilter = user?.role === 'DOCTOR' ? `&doctor=${user.u_id}` : '';
-            const { data } = await api.get(`/reception/visits/?status__in=OPEN,IN_PROGRESS${doctorFilter}&page=${page}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
+            const { data } = await api.get(`/reception/visits/?status__in=OPEN,IN_PROGRESS&assigned_role__in=DOCTOR,LAB${doctorFilter}&page=${page}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
             // Safety filter: Ensure no Pharmacy referrals appear even if backend update lags
             const cleanResults = (data.results || data).filter(v => v.assigned_role !== 'PHARMACY');
             setVisitsData({ ...data, results: cleanResults });
@@ -477,7 +552,7 @@ const Doctor = () => {
                                     <div>
                                         <h2 className="text-xl font-bold text-slate-900 leading-tight">{selectedVisit.patient_name}</h2>
                                         <div className="flex items-center gap-3 text-xs font-bold text-slate-500 mt-1 uppercase tracking-wide">
-                                            <span>ID: {(selectedVisit.v_id || selectedVisit.id).slice(0, 8)}</span>
+                                            <span>ID: {selectedVisit.patient_registration_number || (selectedVisit.v_id || selectedVisit.id).slice(0, 8)}</span>
                                             <span className="w-1 h-1 bg-slate-300 rounded-full" />
                                             <span className="text-blue-600">
                                                 {selectedVisit.patient_gender === 'M' ? 'Male' : selectedVisit.patient_gender === 'F' ? 'Female' : 'Other'} • {selectedVisit.patient_age} Yrs
@@ -879,14 +954,26 @@ const Doctor = () => {
                                                 <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                                                     <Activity size={16} className="text-rose-500" /> Vitals Today
                                                 </label>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase">BP</p>
+                                                <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                                                    <div className="p-3 bg-blue-50 rounded-2xl border border-blue-100">
+                                                        <p className="text-[10px] text-blue-400 font-bold uppercase flex items-center gap-1"><Heart size={10} /> BP</p>
                                                         <p className="text-lg font-bold text-slate-900">{selectedVisit.vitals?.bp || '--/--'}</p>
                                                     </div>
-                                                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Temp</p>
-                                                        <p className="text-lg font-bold text-slate-900">{selectedVisit.vitals?.temp ? `${selectedVisit.vitals.temp}°F` : '--°F'}</p>
+                                                    <div className="p-3 bg-amber-50 rounded-2xl border border-amber-100">
+                                                        <p className="text-[10px] text-amber-400 font-bold uppercase flex items-center gap-1"><Thermometer size={10} /> Temp</p>
+                                                        <p className="text-lg font-bold text-slate-900">{selectedVisit.vitals?.temp ? `${selectedVisit.vitals.temp}°F` : '--'}</p>
+                                                    </div>
+                                                    <div className="p-3 bg-rose-50 rounded-2xl border border-rose-100">
+                                                        <p className="text-[10px] text-rose-400 font-bold uppercase flex items-center gap-1"><Activity size={10} /> Pulse</p>
+                                                        <p className="text-lg font-bold text-slate-900">{selectedVisit.vitals?.pulse ? `${selectedVisit.vitals.pulse} bpm` : '--'}</p>
+                                                    </div>
+                                                    <div className="p-3 bg-cyan-50 rounded-2xl border border-cyan-100">
+                                                        <p className="text-[10px] text-cyan-400 font-bold uppercase flex items-center gap-1"><Wind size={10} /> SpO2</p>
+                                                        <p className="text-lg font-bold text-slate-900">{selectedVisit.vitals?.spo2 ? `${selectedVisit.vitals.spo2}%` : '--'}</p>
+                                                    </div>
+                                                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                                                        <p className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1"><Scale size={10} /> Weight</p>
+                                                        <p className="text-lg font-bold text-slate-900">{selectedVisit.vitals?.weight ? `${selectedVisit.vitals.weight} kg` : '--'}</p>
                                                     </div>
                                                 </div>
                                             </div>

@@ -16,7 +16,7 @@ class Patient(BaseModel):
     registration_number = models.CharField(max_length=50, unique=True, default='TEMP', help_text="Manual Registration Number")
     age = models.PositiveIntegerField(validators=[MinValueValidator(0)])
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
-    phone = models.CharField(max_length=15, unique=True)
+    phone = models.CharField(max_length=15)
     address = models.TextField()
     id_proof = models.CharField(max_length=50, blank=True, null=True)
 

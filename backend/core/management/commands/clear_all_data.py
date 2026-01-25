@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from patients.models import Patient, Visit
 from medical.models import DoctorNote
-from casualty.models import CasualtyLog
+from casualty.models import CasualtyLog, CasualtyMedicine, CasualtyService, CasualtyObservation, CasualtyServiceDefinition
 from lab.models import LabCharge, LabInventory
 from pharmacy.models import Supplier, PharmacyStock, PurchaseInvoice, PharmacySale
 from billing.models import Invoice
@@ -30,8 +30,21 @@ class Command(BaseCommand):
                 count, _ = DoctorNote.objects.all().delete()
                 self.stdout.write(f"Deleted {count} Doctor Notes.")
                 
+                # Casualty - Delete transactional items first to avoid ProtectedError on Stock/Definitions
+                count, _ = CasualtyMedicine.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Casualty Medicines.")
+                
+                count, _ = CasualtyService.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Casualty Services.")
+                
+                count, _ = CasualtyObservation.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Casualty Observations.")
+
                 count, _ = CasualtyLog.objects.all().delete()
                 self.stdout.write(f"Deleted {count} Casualty Logs.")
+
+                count, _ = CasualtyServiceDefinition.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Casualty Service Definitions.")
 
                 # Pharmacy
                 # Delete Sales (Items cascade)

@@ -11,10 +11,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, required=False)
     patient_display = serializers.SerializerMethodField()
     patient_id = serializers.SerializerMethodField()
+    registration_number = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
-        fields = ['id', 'visit', 'patient_name', 'total_amount', 'payment_status', 'items', 'patient_display', 'patient_id', 'created_at']
+        fields = ['id', 'visit', 'patient_name', 'total_amount', 'payment_status', 'items', 'patient_display', 'patient_id', 'registration_number', 'created_at']
 
     def get_patient_display(self, obj):
         if obj.visit and obj.visit.patient:
@@ -25,6 +26,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if obj.visit and obj.visit.patient:
             return obj.visit.patient.id
         return None
+
+    def get_registration_number(self, obj):
+        if obj.visit and obj.visit.patient:
+            return obj.visit.patient.registration_number
+        return "N/A"
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
