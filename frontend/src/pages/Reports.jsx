@@ -293,16 +293,16 @@ const Reports = () => {
                                     <div className="space-y-6">
                                         <div>
                                             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Revenue</p>
-                                            <h3 className="text-5xl font-black font-outfit tracking-tight">₹{data?.total_revenue || 0}</h3>
+                                            <h3 className="text-5xl font-black font-outfit tracking-tight">₹{Number(data?.total_revenue || 0).toFixed(2)}</h3>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
                                                 <p className="text-slate-400 text-[10px] font-bold uppercase">Expense</p>
-                                                <p className="text-lg font-black text-rose-400">₹{data?.total_expense || 0}</p>
+                                                <p className="text-lg font-black text-rose-400">₹{Number(data?.total_expense || 0).toFixed(2)}</p>
                                             </div>
                                             <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
                                                 <p className="text-slate-400 text-[10px] font-bold uppercase">Profit</p>
-                                                <p className={`text-lg font-black ${data?.net_profit >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>₹{data?.net_profit || 0}</p>
+                                                <p className={`text-lg font-black ${data?.net_profit >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>₹{Number(data?.net_profit || 0).toFixed(2)}</p>
                                             </div>
                                         </div>
                                     </div>

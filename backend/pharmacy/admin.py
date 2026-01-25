@@ -1,5 +1,15 @@
 from django.contrib import admin
-from .models import Supplier, PurchaseInvoice, PurchaseItem, PharmacyStock, PharmacySale, PharmacySaleItem
+from .models import Supplier, PurchaseInvoice, PurchaseItem, PharmacyStock, PharmacySale, PharmacySaleItem, PharmacyReturn, PharmacyReturnItem
+
+class PharmacyReturnItemInline(admin.TabularInline):
+    model = PharmacyReturnItem
+    extra = 0
+
+@admin.register(PharmacyReturn)
+class PharmacyReturnAdmin(admin.ModelAdmin):
+    list_display = ('id', 'sale', 'total_refund_amount', 'status', 'return_date')
+    list_filter = ('status', 'return_date')
+    inlines = [PharmacyReturnItemInline]
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):

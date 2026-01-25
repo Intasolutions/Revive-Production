@@ -7,6 +7,7 @@ class Invoice(BaseModel):
     visit = models.ForeignKey(Visit, on_delete=models.SET_NULL, null=True, related_name='invoices')
     patient_name = models.CharField(max_length=255, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    refund_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payment_status = models.CharField(max_length=20, default='PENDING', choices=PAYMENT_STATUS)
 
     def __str__(self):

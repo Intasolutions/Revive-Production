@@ -3,8 +3,8 @@ from django.db import transaction
 from patients.models import Patient, Visit
 from medical.models import DoctorNote
 from casualty.models import CasualtyLog, CasualtyMedicine, CasualtyService, CasualtyObservation, CasualtyServiceDefinition
-from lab.models import LabCharge, LabInventory
-from pharmacy.models import Supplier, PharmacyStock, PurchaseInvoice, PharmacySale
+from lab.models import LabCharge, LabInventory, LabPurchase, LabPurchaseItem, LabBatch, LabSupplier, LabInventoryLog
+from pharmacy.models import Supplier, PharmacyStock, PurchaseInvoice, PurchaseItem, PharmacySale, PharmacyReturn, PharmacyReturnItem
 from billing.models import Invoice
 
 class Command(BaseCommand):
@@ -22,9 +22,24 @@ class Command(BaseCommand):
                 # Lab (Results inside LabCharge JSON or cascade? LabCharge is it).
                 count, _ = LabCharge.objects.all().delete()
                 self.stdout.write(f"Deleted {count} Lab Charges.")
+
+                count, _ = LabInventoryLog.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Lab Inventory Logs.")
+
+                count, _ = LabPurchaseItem.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Lab Purchase Items.")
+
+                count, _ = LabPurchase.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Lab Purchases.")
+                
+                count, _ = LabBatch.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Lab Batches.")
                 
                 count, _ = LabInventory.objects.all().delete()
                 self.stdout.write(f"Deleted {count} Lab Inventory items.")
+
+                count, _ = LabSupplier.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Lab Suppliers.")
 
                 # Medical (DoctorNote, CasualtyLog cascade from Visit usually, but explicit is good)
                 count, _ = DoctorNote.objects.all().delete()
@@ -48,10 +63,18 @@ class Command(BaseCommand):
 
                 # Pharmacy
                 # Delete Sales (Items cascade)
+                # Delete Returns First (FK to Sale)
+                count, _ = PharmacyReturnItem.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Pharmacy Return Items.")
+                count, _ = PharmacyReturn.objects.all().delete()
+                self.stdout.write(f"Deleted {count} Pharmacy Returns.")
+
                 count, _ = PharmacySale.objects.all().delete()
                 self.stdout.write(f"Deleted {count} Pharmacy Sales.")
                 
                 # Delete Purchases (Items cascade)
+                count, _ = PurchaseItem.objects.all().delete() # Explicit delete items first just in case
+                self.stdout.write(f"Deleted {count} Purchase Items.")
                 count, _ = PurchaseInvoice.objects.all().delete()
                 self.stdout.write(f"Deleted {count} Purchase Invoices.")
                 

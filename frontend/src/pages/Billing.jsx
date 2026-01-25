@@ -3,7 +3,7 @@ import {
     Plus, Search, FileText, Download, Printer, CheckCircle2,
     Clock, TrendingUp, IndianRupee, AlertCircle, X, User,
     Calendar, Pill, ChevronDown, Import, ChevronRight, Sparkles,
-    Eye, CreditCard, Wallet, MoreHorizontal
+    Eye, CreditCard, Wallet, MoreHorizontal, RotateCcw
 } from "lucide-react";
 import api from "../api/axios";
 import { motion, AnimatePresence } from "framer-motion";
@@ -248,7 +248,9 @@ const Billing = () => {
                     if (obs.start_time) {
                         const start = new Date(obs.start_time);
                         const end = obs.end_time ? new Date(obs.end_time) : new Date();
-                        durationMinutes = Math.max(Math.ceil((end - start) / 60000), 60); // Minimum 1 hour charge
+                        const elapsed = Math.ceil((end - start) / 60000);
+                        // Use the greater of: Actual Elapsed, Planned Duration, or Minimum 60 mins
+                        durationMinutes = Math.max(elapsed, obs.planned_duration_minutes || 0, 60);
                     }
 
                     const hours = (durationMinutes / 60).toFixed(1);
@@ -419,7 +421,12 @@ const Billing = () => {
 
     const calculateSubtotal = (items) => (items || []).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const handleCreateInvoice = async () => {
+        if (isSubmitting) return; // Prevent double clicks
+
+        setIsSubmitting(true);
         const subtotal = calculateSubtotal(formData.items);
         const invoiceData = {
             patient_name: formData.patient_name,
@@ -436,7 +443,11 @@ const Billing = () => {
             setFormData({ patient_name: "", visit: null, doctor: "", payment_status: "PENDING", items: [] });
             fetchInvoices(); fetchStats(); fetchPendingVisits();
             showToast('success', "Invoice saved successfully!");
-        } catch (err) { showToast('error', "Failed to save invoice."); }
+        } catch (err) {
+            showToast('error', "Failed to save invoice.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleEditInvoice = async (invoice) => {
@@ -506,8 +517,11 @@ const Billing = () => {
             // For now, simpler to just append them if not present, OR rely on initial creation.
             // Let's rely on standard item merging logic below.
 
-            const existingKeys = new Set(baseItems.map(i => `${i.description}-${i.batch}`));
-            const uniquePharmacyItems = visitPharmacyItems.filter(i => !existingKeys.has(`${i.description}-${i.batch}`));
+            const existingKeys = new Set(baseItems.map(i => `${i.description}-${i.batch || ''}`));
+
+            const uniquePharmacyItems = visitPharmacyItems.filter(i => !existingKeys.has(`${i.description}-${i.batch || ''}`));
+            const uniqueCasualtyMeds = visitCasualtyMedicines.filter(i => !existingKeys.has(`${i.description}-${i.batch || ''}`)); // Using description-batch for meds
+            const uniqueCasualtyServices = visitCasualtyServices.filter(i => !existingKeys.has(`${i.description}-`)); // Services have no batch
 
             setFormData({
                 id: invoice.id,
@@ -517,7 +531,12 @@ const Billing = () => {
                 doctor_display_name: invoice.doctor_display_name || (visitData ? visitData.doctor_name : "") || "Not Assigned",
                 payment_status: invoice.payment_status,
                 registration_number: invoice.registration_number || (visitData && visitData.patient ? visitData.patient.registration_number : "") || "N/A",
-                items: [...baseItems.map(i => ({ ...i, stock_deducted: true })), ...uniquePharmacyItems, ...visitCasualtyMedicines, ...visitCasualtyServices]
+                items: [
+                    ...baseItems.map(i => ({ ...i, stock_deducted: true })),
+                    ...uniquePharmacyItems,
+                    ...uniqueCasualtyMeds,
+                    ...uniqueCasualtyServices
+                ]
             });
 
             if (invoice.patient_id || (visitData && visitData.patient)) {
@@ -702,10 +721,17 @@ const Billing = () => {
                                         <td className="px-6 py-4 font-bold text-slate-900">{invoice.patient_name || "Guest"}</td>
                                         <td className="px-6 py-4 font-bold text-slate-700">₹{invoice.total_amount}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide border ${invoice.payment_status === 'PAID' ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"
-                                                }`}>
-                                                {invoice.payment_status}
-                                            </span>
+                                            <div className="flex flex-col items-start gap-1">
+                                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide border ${invoice.payment_status === 'PAID' ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"
+                                                    }`}>
+                                                    {invoice.payment_status}
+                                                </span>
+                                                {parseFloat(invoice.refund_amount) > 0 && (
+                                                    <span className="px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wide border bg-rose-50 text-rose-600 border-rose-100 flex items-center gap-1">
+                                                        <RotateCcw size={10} /> Refunded: ₹{invoice.refund_amount}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-xs font-medium text-slate-500">{new Date(invoice.created_at).toLocaleDateString()}</td>
                                         <td className="px-6 py-4 text-right flex justify-end gap-2">
@@ -931,7 +957,21 @@ const Billing = () => {
                                                             }}
                                                         />
                                                     </td>
-                                                    <td className="py-4 text-right font-bold text-slate-900">₹{item.amount}</td>
+                                                    <td className="py-4 text-right">
+                                                        <input
+                                                            type="number"
+                                                            className="w-full bg-transparent text-right font-bold text-slate-900 outline-none placeholder:text-slate-300 print:placeholder-transparent"
+                                                            value={item.amount}
+                                                            onChange={(e) => {
+                                                                const newAmount = parseFloat(e.target.value) || 0;
+                                                                const newItems = [...formData.items];
+                                                                // Reverse calculate unit price if qty > 0
+                                                                const newUnitPrice = item.qty > 0 ? (newAmount / item.qty).toFixed(2) : 0;
+                                                                newItems[idx] = { ...item, amount: newAmount, unit_price: newUnitPrice };
+                                                                setFormData({ ...formData, items: newItems });
+                                                            }}
+                                                        />
+                                                    </td>
                                                     <td className="py-4 text-center no-print">
                                                         <button onClick={() => {
                                                             const newItems = formData.items.filter((_, i) => i !== idx);
@@ -974,8 +1014,8 @@ const Billing = () => {
                                 </div>
                                 <div className="flex gap-3">
                                     <button onClick={() => setShowModal(false)} className="px-6 py-3 rounded-xl font-bold text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 transition-all">Cancel</button>
-                                    <button onClick={handleCreateInvoice} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-blue-600 transition-all flex items-center gap-2">
-                                        <CheckCircle2 size={18} /> {formData.id ? 'Update Invoice' : 'Generate Invoice'}
+                                    <button onClick={handleCreateInvoice} disabled={isSubmitting} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-900/20 hover:bg-blue-600 transition-all flex items-center gap-2 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                                        <CheckCircle2 size={18} /> {isSubmitting ? 'Saving...' : (formData.id ? 'Update Invoice' : 'Generate Invoice')}
                                     </button>
                                 </div>
                             </div>

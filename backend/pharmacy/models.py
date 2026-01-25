@@ -72,6 +72,10 @@ class PharmacyStock(BaseModel):
 
     qty_available = models.PositiveIntegerField(default=0)
     reorder_level = models.PositiveIntegerField(default=10)
+    
+    # Track Original Bill Price (PTR) separate from Effective Purchase Rate
+    ptr = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], default=0)
+
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True)
 
     # Added for billing details
@@ -87,8 +91,8 @@ class PharmacyStock(BaseModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['name', 'batch_no', 'expiry_date', 'supplier'],
-                name='unique_stock_name_batch_exp_supplier'
+                fields=['name', 'batch_no'],
+                name='unique_stock_name_batch'
             )
         ]
 

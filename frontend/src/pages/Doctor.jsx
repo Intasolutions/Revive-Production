@@ -818,11 +818,16 @@ const Doctor = () => {
                                                                     <div
                                                                         key={med.id}
                                                                         onClick={() => addMedicine(med)}
-                                                                        className="px-4 py-3 hover:bg-emerald-50 cursor-pointer flex justify-between items-center group"
+                                                                        className={`px-4 py-3 cursor-pointer flex justify-between items-center group transition-colors ${med.qty_available < 1 ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-emerald-50'}`}
                                                                     >
-                                                                        <span className="text-sm font-bold text-slate-700 group-hover:text-emerald-700">{med.name}</span>
+                                                                        <div>
+                                                                            <span className={`text-sm font-bold ${med.qty_available < 1 ? 'text-red-700' : 'text-slate-700 group-hover:text-emerald-700'}`}>{med.name}</span>
+                                                                            {med.qty_available < 1 && <span className="block text-[9px] font-bold text-red-500">Out of Stock</span>}
+                                                                        </div>
                                                                         <div className="flex flex-col items-end">
-                                                                            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md mb-1">Stock: {med.qty_available} Tabs</span>
+                                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md mb-1 ${med.qty_available < 1 ? 'bg-red-200 text-red-800' : med.qty_available < 10 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                                                {med.qty_available < 1 ? '0 Stock' : `Stock: ${med.qty_available} Tabs`}
+                                                                            </span>
                                                                             <span className="text-[10px] font-black text-emerald-600">₹{(med.mrp / (med.tablets_per_strip || 1)).toFixed(2)}/Tab</span>
                                                                         </div>
                                                                     </div>

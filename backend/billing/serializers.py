@@ -15,7 +15,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Invoice
-        fields = ['id', 'visit', 'patient_name', 'total_amount', 'payment_status', 'items', 'patient_display', 'patient_id', 'registration_number', 'created_at']
+        fields = ['id', 'visit', 'patient_name', 'total_amount', 'refund_amount', 'payment_status', 'items', 'patient_display', 'patient_id', 'registration_number', 'created_at']
 
     def get_patient_display(self, obj):
         if obj.visit and obj.visit.patient:

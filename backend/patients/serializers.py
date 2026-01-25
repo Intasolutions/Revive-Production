@@ -50,13 +50,14 @@ class VisitSerializer(serializers.ModelSerializer):
         model = Visit
         fields = [
             'id', 'v_id', 'patient', 'patient_name', 'doctor', 'doctor_name', 'consultation_fee', 'assigned_role',
-            'status', 'vitals', 'prescription', 'lab_referral_details', 'pharmacy_items', 'lab_results', 'lab_charges_data',
+            'status', 'vitals', 'prescription', 'diagnosis', 'lab_referral_details', 'pharmacy_items', 'lab_results', 'lab_charges_data',
             'casualty_medicines', 'casualty_services', 'casualty_observations',
             'patient_age', 'patient_gender', 'patient_registration_number', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'v_id', 'created_at', 'updated_at']
 
     prescription = serializers.SerializerMethodField()
+    diagnosis = serializers.SerializerMethodField()
     lab_referral_details = serializers.SerializerMethodField()
     lab_charges_data = serializers.SerializerMethodField()
     pharmacy_items = serializers.SerializerMethodField()
@@ -166,6 +167,14 @@ class VisitSerializer(serializers.ModelSerializer):
         try:
             if hasattr(obj, 'doctor_note') and obj.doctor_note:
                 return obj.doctor_note.prescription
+        except:
+            pass
+        return None
+
+    def get_diagnosis(self, obj):
+        try:
+            if hasattr(obj, 'doctor_note') and obj.doctor_note:
+                return obj.doctor_note.diagnosis
         except:
             pass
         return None

@@ -456,8 +456,77 @@ const ManageServicesModal = ({ onClose, serviceDefinitions = [], onCreate, onUpd
                 </div>
 
                 <div className="p-8 overflow-y-auto custom-scrollbar space-y-8">
-                    {/* Create/Edit Form */}
-                    <div className={`p-6 rounded-[24px] border transition-colors ${editingId ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
+                    {/* --- Special Section: Observation Charge --- */}
+                    <div className="p-6 rounded-[24px] border bg-indigo-50 border-indigo-200">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Clock size={16} className="text-indigo-600" />
+                            <h4 className="text-xs font-black text-indigo-900 uppercase tracking-widest">Observation Fee Configuration</h4>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1">
+                                <p className="text-xs text-indigo-700 font-medium leading-relaxed">
+                                    Set the hourly rate for patient observation. This will be automatically calculated in the billing section based on duration.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {newService.name === 'Observation Charge' ? (
+                                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                autoFocus
+                                                className="w-32 p-2 pl-8 bg-white border-2 border-indigo-400 rounded-xl font-black text-lg text-indigo-900 outline-none focus:ring-4 ring-indigo-500/20 transition-all"
+                                                value={newService.charge}
+                                                onChange={e => setNewService({ ...newService, charge: e.target.value })}
+                                                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                                            />
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400 font-bold">₹</span>
+                                        </div>
+                                        <button
+                                            onClick={handleSubmit}
+                                            className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 transition-all"
+                                        >
+                                            <CheckCircle size={20} />
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setNewService({ name: '', charge: '' });
+                                                setEditingId(null);
+                                            }}
+                                            className="p-3 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-500 border border-indigo-100 rounded-xl transition-all"
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <div className="bg-white px-4 py-2 rounded-xl border border-indigo-200 text-indigo-900 font-black text-lg">
+                                            ₹{serviceDefinitions.find(s => s.name === 'Observation Charge')?.base_charge || '500'}
+                                            <span className="text-[10px] text-indigo-400 font-bold ml-1">/hr</span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                const obs = serviceDefinitions.find(s => s.name === 'Observation Charge');
+                                                if (obs) {
+                                                    setNewService({ name: 'Observation Charge', charge: obs.base_charge });
+                                                    setEditingId(obs.id);
+                                                } else {
+                                                    setNewService({ name: 'Observation Charge', charge: '500' });
+                                                    setEditingId(null);
+                                                }
+                                            }}
+                                            className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-200 transition-all font-bold text-xs"
+                                        >
+                                            {serviceDefinitions.find(s => s.name === 'Observation Charge') ? 'Edit Rate' : 'Set Rate'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Create/Edit Form (Generic) */}
+                    <div className={`p-6 rounded-[24px] border transition-colors ${editingId && newService.name !== 'Observation Charge' ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'} ${newService.name === 'Observation Charge' ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
                         <h4 className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-4 ${editingId ? 'text-amber-500' : 'text-slate-400'}`}>
                             {editingId ? <Pencil size={14} /> : <Plus size={14} className="text-emerald-500" />}
                             {editingId ? 'Edit Service Details' : 'Create New Service'}
@@ -468,7 +537,7 @@ const ManageServicesModal = ({ onClose, serviceDefinitions = [], onCreate, onUpd
                                 <input
                                     className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-500 transition-all"
                                     placeholder="e.g. Oxygen Charge"
-                                    value={newService.name}
+                                    value={newService.name === 'Observation Charge' ? '' : newService.name}
                                     onChange={e => setNewService({ ...newService, name: e.target.value })}
                                 />
                             </div>
@@ -478,7 +547,7 @@ const ManageServicesModal = ({ onClose, serviceDefinitions = [], onCreate, onUpd
                                     type="number"
                                     className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-500 transition-all"
                                     placeholder="0.00"
-                                    value={newService.charge}
+                                    value={newService.name === 'Observation Charge' ? '' : newService.charge}
                                     onChange={e => setNewService({ ...newService, charge: e.target.value })}
                                 />
                             </div>
@@ -488,7 +557,7 @@ const ManageServicesModal = ({ onClose, serviceDefinitions = [], onCreate, onUpd
                             >
                                 {editingId ? 'Update' : 'Add'}
                             </button>
-                            {editingId && (
+                            {editingId && newService.name !== 'Observation Charge' && (
                                 <button
                                     onClick={() => {
                                         setEditingId(null);

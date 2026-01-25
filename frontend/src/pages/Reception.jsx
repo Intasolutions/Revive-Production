@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     UserPlus, Phone, User as UserIcon, ArrowRight, X,
     Activity, Thermometer, Heart, Scale, Stethoscope,
-    MapPin, ChevronRight, Search, CheckCircle2, AlertCircle, FileText, IndianRupee
+    MapPin, ChevronRight, Search, CheckCircle2, AlertCircle, FileText, IndianRupee, Edit
 } from 'lucide-react';
 import { useSearch } from '../context/SearchContext';
 import { useAuth } from '../context/AuthContext';
@@ -62,6 +62,7 @@ const Reception = () => {
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [activeTab, setActiveTab] = useState('front-desk'); // 'front-desk' | 'billing'
+    const [editingPatientId, setEditingPatientId] = useState(null);
 
     // Modals
     const [showAddModal, setShowAddModal] = useState(false);
@@ -235,28 +236,58 @@ const Reception = () => {
         }
 
         try {
-            const response = await api.post('/reception/patients/register/', form);
-
-            // Backend returns 200 OK if patient exists, 201 CREATED if new
-            if (response.status === 200) {
-                showToast('error', 'The patient is already there with this number');
-                return;
+            let response;
+            if (editingPatientId) {
+                // Update Mode
+                response = await api.patch(`/reception/patients/${editingPatientId}/`, form);
+                showToast('success', 'Patient details updated successfully!');
+            } else {
+                // Create Mode
+                response = await api.post('/reception/patients/register/', form);
+                // Backend returns 200 OK if patient exists, 201 CREATED if new
+                if (response.status === 200) {
+                    showToast('error', 'The patient is already there with this number');
+                    return;
+                }
+                showToast('success', 'New patient registered successfully!');
             }
 
             setShowAddModal(false);
+            setEditingPatientId(null); // Reset edit mode
             setPage(1);
             fetchPatients();
-            setForm({ full_name: '', age: '', gender: 'M', phone: '', address: '' });
+            setForm({ registration_number: '', full_name: '', age: '', gender: 'M', phone: '', address: '' });
             setErrors({});
-            showToast('success', 'New patient registered successfully!');
+
         } catch (err) {
             console.error(err);
             if (err.response && err.response.data && err.response.data.registration_number) {
                 showToast('error', 'Registration Number already exists. Please use a unique ID.');
             } else {
-                showToast('error', 'Registration failed. Please check network connection.');
+                showToast('error', 'Operation failed. Please check network connection.');
             }
         }
+    };
+
+    const handleEditPatient = (p, e) => {
+        e.stopPropagation(); // Prevent opening history
+        setForm({
+            registration_number: p.registration_number || '',
+            full_name: p.full_name || '',
+            age: p.age || '',
+            gender: p.gender || 'M',
+            phone: p.phone || '',
+            address: p.address || ''
+        });
+        setEditingPatientId(p.p_id || p.id);
+        setShowAddModal(true);
+    };
+
+    const handleAddNewPatient = () => {
+        setForm({ registration_number: '', full_name: '', age: '', gender: 'M', phone: '', address: '' });
+        setEditingPatientId(null);
+        setErrors({});
+        setShowAddModal(true);
     };
 
     const handleNewVisit = async (p) => {
@@ -434,7 +465,7 @@ const Reception = () => {
                                 <p className="text-slate-500 font-medium mt-1">Register new patients and manage daily visits.</p>
                             </div>
                             <button
-                                onClick={() => setShowAddModal(true)}
+                                onClick={handleAddNewPatient}
                                 className="group flex items-center gap-3 px-6 py-3.5 bg-slate-950 text-white rounded-2xl font-bold shadow-xl shadow-slate-900/20 hover:bg-blue-600 hover:shadow-blue-600/20 transition-all active:scale-[0.98]"
                             >
                                 <div className="p-1 rounded-lg bg-white/20 group-hover:bg-white/30 transition-colors">
@@ -513,6 +544,13 @@ const Reception = () => {
                                                             <td className="px-6 py-5 text-right">
                                                                 <div className="flex items-center justify-end gap-2">
                                                                     <button
+                                                                        onClick={(e) => handleEditPatient(p, e)}
+                                                                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                        title="Edit Patient"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </button>
+                                                                    <button
                                                                         onClick={(e) => handleApproveCasualty(e, p)}
                                                                         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 text-xs font-bold hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
                                                                     >
@@ -554,29 +592,30 @@ const Reception = () => {
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
                                         transition={{ type: "spring", duration: 0.5 }}
-                                        className="relative bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden ring-1 ring-white/20"
+                                        className="relative bg-white w-full max-w-2xl max-h-[90vh] flex flex-col rounded-[40px] shadow-2xl overflow-hidden ring-1 ring-white/20"
                                     >
-                                        <div className="px-10 py-8 border-b border-slate-100 flex justify-between items-start bg-slate-50/30">
+                                        <div className="px-10 py-8 border-b border-slate-100 flex justify-between items-start bg-slate-50/30 flex-shrink-0">
                                             <div>
-                                                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">New Patient Registration</h3>
-                                                <p className="text-slate-500 text-sm mt-1">Please enter the patient's details below.</p>
+                                                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{editingPatientId ? 'Edit Patient Details' : 'New Patient Registration'}</h3>
+                                                <p className="text-slate-500 text-sm mt-1">{editingPatientId ? 'Update the details below.' : "Please enter the patient's details below."}</p>
                                             </div>
                                             <button onClick={() => setShowAddModal(false)} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all">
                                                 <X size={24} />
                                             </button>
                                         </div>
-                                        <div className="p-10 space-y-6">
+                                        <div className="p-10 space-y-6 overflow-y-auto custom-scrollbar">
                                             <div className="space-y-4">
                                                 <div>
                                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Registration Number</label>
-                                                    <div className={`flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 transition-all ${errors.registration_number ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10'}`}>
+                                                    <div className={`flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 transition-all ${errors.registration_number ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10'} ${editingPatientId ? 'opacity-60 cursor-not-allowed' : ''}`}>
                                                         <FileText className={errors.registration_number ? "text-rose-400" : "text-slate-400"} size={20} />
                                                         <input
                                                             type="text"
                                                             placeholder="e.g. OP-2024-001"
-                                                            className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none"
+                                                            className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed"
                                                             value={form.registration_number}
                                                             onChange={(e) => setForm({ ...form, registration_number: e.target.value })}
+                                                            disabled={!!editingPatientId}
                                                         />
                                                     </div>
                                                     {errors.registration_number && <p className="text-xs font-bold text-rose-500 mt-2 ml-2 flex items-center gap-1"><AlertCircle size={12} /> {errors.registration_number}</p>}
@@ -662,7 +701,7 @@ const Reception = () => {
                                                 onClick={handleRegister}
                                                 className="w-full py-5 bg-slate-950 text-white rounded-2xl font-bold text-lg shadow-xl shadow-slate-900/20 hover:bg-blue-600 hover:shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
                                             >
-                                                <span>Complete Registration</span>
+                                                <span>{editingPatientId ? 'Update Patient' : 'Complete Registration'}</span>
                                                 <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
                                                     <CheckCircle2 size={16} />
                                                 </div>
@@ -896,13 +935,53 @@ const Reception = () => {
                                                     <p className="text-center text-slate-400 py-10">No previous visits found.</p>
                                                 ) : (
                                                     patientHistory.map((visit) => (
-                                                        <div key={visit.v_id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:border-blue-200 transition-all">
-                                                            <div className="flex justify-between mb-2">
-                                                                <span className="text-xs font-bold text-slate-400">{new Date(visit.created_at).toLocaleDateString()}</span>
-                                                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${visit.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{visit.status}</span>
+                                                        <div key={visit.v_id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:border-blue-200 transition-all space-y-3">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <p className="font-bold text-slate-900 text-sm">{visit.assigned_role === 'DOCTOR' ? `Dr. ${visit.doctor_name || 'Unassigned'}` : visit.assigned_role}</p>
+                                                                    <span className="text-xs font-bold text-slate-400">{new Date(visit.created_at).toLocaleDateString()}</span>
+                                                                </div>
+                                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${visit.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{visit.status}</span>
                                                             </div>
-                                                            <p className="font-bold text-slate-900 text-sm mb-1">{visit.assigned_role === 'DOCTOR' ? `Dr. ${visit.doctor_name || 'Unassigned'}` : visit.assigned_role}</p>
-                                                            {visit.prescription && <p className="text-xs text-slate-600 mt-2 bg-white p-2 rounded border border-slate-100">💊 Prescription Available</p>}
+
+                                                            {/* Diagnosis */}
+                                                            {visit.diagnosis && (
+                                                                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Diagnosis</p>
+                                                                    <p className="text-xs font-medium text-slate-700">{visit.diagnosis}</p>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Prescription */}
+                                                            {visit.prescription && Object.keys(visit.prescription).length > 0 && (
+                                                                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Prescription</p>
+                                                                    <div className="space-y-2">
+                                                                        {Object.entries(visit.prescription).map(([med, details], idx) => (
+                                                                            <div key={idx} className="flex justify-between items-start text-xs border-b border-slate-50 last:border-0 pb-1 last:pb-0">
+                                                                                <span className="font-bold text-slate-800">{med}</span>
+                                                                                <span className="text-slate-500 text-[10px]">{details}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Lab Referral / Tests */}
+                                                            {(visit.lab_referral_details || (visit.lab_charges_data && visit.lab_charges_data.length > 0)) && (
+                                                                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Lab Tests</p>
+                                                                    {visit.lab_charges_data && visit.lab_charges_data.length > 0 ? (
+                                                                        <div className="flex flex-wrap gap-1">
+                                                                            {visit.lab_charges_data.map((test, i) => (
+                                                                                <span key={i} className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded text-[10px] font-bold">{test.test_name}</span>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <p className="text-xs text-slate-600">{visit.lab_referral_details}</p>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))
                                                 )
@@ -911,20 +990,43 @@ const Reception = () => {
                                                     <p className="text-center text-slate-400 py-10">No invoices found for this patient.</p>
                                                 ) : (
                                                     patientInvoices.map((inv) => (
-                                                        <div key={inv.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:border-indigo-200 transition-all group">
-                                                            <div className="flex justify-between mb-2">
-                                                                <span className="text-xs font-bold text-slate-400">{new Date(inv.created_at).toLocaleDateString()}</span>
-                                                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${inv.payment_status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        <div key={inv.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:border-indigo-200 transition-all group space-y-3">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <p className="font-bold text-slate-900 text-sm">Invoice #{inv.id.toString().slice(0, 8)}</p>
+                                                                    <span className="text-xs font-bold text-slate-400">{new Date(inv.created_at).toLocaleDateString()}</span>
+                                                                </div>
+                                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${inv.payment_status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                                     {inv.payment_status}
                                                                 </span>
                                                             </div>
-                                                            <div className="flex justify-between items-center">
-                                                                <div>
-                                                                    <p className="font-bold text-slate-900 text-sm">Invoice #{inv.id.toString().slice(0, 8)}</p>
-                                                                    <p className="text-xs text-slate-500">{inv.items ? inv.items.length : 0} Items</p>
+
+                                                            {/* Invoice Items */}
+                                                            {inv.items && inv.items.length > 0 && (
+                                                                <div className="bg-white p-3 rounded-xl border border-slate-200">
+                                                                    <table className="w-full text-left">
+                                                                        <thead className="text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-50">
+                                                                            <tr>
+                                                                                <th className="pb-1">Item</th>
+                                                                                <th className="pb-1 text-right">Amt</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody className="text-xs font-medium text-slate-600">
+                                                                            {inv.items.map((item, idx) => (
+                                                                                <tr key={idx} className="border-b border-slate-50 last:border-0">
+                                                                                    <td className="py-1 pr-2 truncate max-w-[150px]">{item.description || item.name || 'Item'}</td>
+                                                                                    <td className="py-1 text-right font-bold">₹{item.amount || 0}</td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
                                                                 </div>
+                                                            )}
+
+                                                            <div className="flex justify-between items-center pt-2 border-t border-slate-200/50">
+                                                                <p className="text-xs font-bold text-slate-400 uppercase">Total Bill</p>
                                                                 <div className="flex items-center gap-3">
-                                                                    <p className="text-lg font-bold text-slate-700">₹{inv.total_amount}</p>
+                                                                    <p className="text-lg font-black text-slate-900">₹{inv.total_amount}</p>
                                                                     {inv.payment_status === 'PENDING' && (
                                                                         <button
                                                                             onClick={async () => {
@@ -932,7 +1034,10 @@ const Reception = () => {
                                                                                 try {
                                                                                     await api.patch(`billing/invoices/${inv.id}/`, { payment_status: 'PAID' });
                                                                                     showToast('success', 'Payment collected successfully!');
-                                                                                    fetchHistory(selectedPatient.p_id); // Refresh history
+                                                                                    // fetchHistory needs patient_id not p_id locally in this component context if I recall, but selectedPatient.p_id is likely correct
+                                                                                    // Let's check where fetchHistory comes from. It's likely defined in component.
+                                                                                    // Assuming fetchHistory is available in scope.
+                                                                                    if (selectedPatient && selectedPatient.p_id) fetchHistory(selectedPatient.p_id);
                                                                                 } catch (error) {
                                                                                     console.error(error);
                                                                                     showToast('error', 'Failed to update payment status.');

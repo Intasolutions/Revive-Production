@@ -69,6 +69,19 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
             total_amount += (taxable + gst_amount)
         
         validated_data['total_amount'] = round(total_amount, 2)
+        
+        # Auto-Link to Open Visit if patient exists but visit is missing/null
+        # This fixes the issue where sales don't show in Billing Dashboard if user wasn't in Pharmacy Queue
+        if not validated_data.get('visit') and validated_data.get('patient'):
+            from patients.models import Visit
+            # Find any OPEN visit for this patient
+            open_visit = Visit.objects.filter(
+                patient=validated_data['patient'], 
+                status__in=['OPEN', 'IN_PROGRESS']
+            ).order_by('-updated_at').first()
+            
+            if open_visit:
+                validated_data['visit'] = open_visit
 
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
@@ -108,21 +121,22 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
             else:
                 effective_purch_rate = billed_rate
 
-            # Stock match logic (MANDATORY): product_name + batch_no + expiry + supplier
+            # Stock match logic (MANDATORY): product_name + batch_no ONLY (ignore minor hsn/supplier diffs)
             stock, created = PharmacyStock.objects.get_or_create(
                 name=item['product_name'],
                 batch_no=item['batch_no'],
-                expiry_date=item['expiry_date'],
-                supplier=invoice.supplier,
                 defaults={
+                    'expiry_date': item['expiry_date'], # Set on create
+                    'supplier': invoice.supplier,       # Set on create
                     'barcode': item.get('barcode', '') or '',
                     'mrp': item['mrp'],
-                    'selling_price': item.get('selling_price', item['mrp']), # Use explicit selling price if permitted, else MRP
+                    'selling_price': item.get('selling_price', item['mrp']),
                     'purchase_rate': round(effective_purch_rate, 2),
+                    'ptr': billed_rate, # New: Store Original Billed PTR
                     'qty_available': qty_in,
                     'tablets_per_strip': tps,
                     'hsn': item.get('hsn', '') or '',
-                    'gst_percent': gst_val, # Apply Item GST
+                    'gst_percent': gst_val,
                     'manufacturer': item.get('manufacturer', '') or '',
                     'is_deleted': False,
                 }
@@ -134,14 +148,15 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                 if item.get('barcode'):
                     stock.barcode = item['barcode']
                 stock.mrp = item['mrp']
-                stock.selling_price = item.get('selling_price', item['mrp']) # Use explicit selling price
-                
-                # Update purchase rate to latest effective rate (or handle weighted average if preferred, but simple update is standard here)
+                stock.selling_price = item.get('selling_price', item['mrp'])
                 stock.purchase_rate = round(effective_purch_rate, 2)
+                stock.ptr = billed_rate # Update PTR with latest bill
 
-                stock.hsn = item.get('hsn', stock.hsn)
-                stock.gst_percent = gst_val # Apply Item GST
+                # Sync fields if updated in new purchase
+                stock.hsn = item.get('hsn', stock.hsn) or stock.hsn
+                stock.gst_percent = gst_val
                 stock.manufacturer = item.get('manufacturer', stock.manufacturer)
+                
                 stock.is_deleted = False
                 stock.save()
 
@@ -173,6 +188,7 @@ class PharmacySaleItemSerializer(serializers.ModelSerializer):
 
 class PharmacySaleSerializer(serializers.ModelSerializer):
     sale_id = serializers.UUIDField(source='id', read_only=True)
+    patient_name = serializers.CharField(source='patient.full_name', read_only=True)
     # allow creating items in same request
     items = PharmacySaleItemSerializer(many=True)
 
@@ -361,5 +377,20 @@ class PharmacyReturnSerializer(serializers.ModelSerializer):
 
         ret_record.total_refund_amount = total_refund
         ret_record.save()
+
+        # --- SYNC: Update Billing Invoice ---
+        try:
+            sale = ret_record.sale
+            if sale.visit:
+                # Find linked invoices
+                from billing.models import Invoice
+                # Update all invoices linked to this visit (usually just one)
+                # or find the specific one. For now, updating the sum on the main invoice.
+                invoice = Invoice.objects.filter(visit=sale.visit).order_by('-created_at').first()
+                if invoice:
+                    invoice.refund_amount += total_refund
+                    invoice.save()
+        except Exception as e:
+            print(f"Failed to sync refund to billing: {e}")
 
         return ret_record

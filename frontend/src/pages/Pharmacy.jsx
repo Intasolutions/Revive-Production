@@ -90,6 +90,7 @@ const Pharmacy = () => {
     const [selectedStockItem, setSelectedStockItem] = useState(null);
     const [suppliers, setSuppliers] = useState([]);
     const [filterSupplier, setFilterSupplier] = useState('');
+    const [inventorySearch, setInventorySearch] = useState(''); // New State
     const [editingStockId, setEditingStockId] = useState(null);
     const [editQty, setEditQty] = useState('');
 
@@ -160,11 +161,12 @@ const Pharmacy = () => {
             let url = `pharmacy/stock/?page=${page}`;
             if (rowsPerPage !== 'all') url += `&page_size=${rowsPerPage}`;
             if (filterSupplier) url += `&supplier=${filterSupplier}`;
+            if (inventorySearch) url += `&search=${inventorySearch}`; // Add search param
             const { data } = await api.get(url);
             setStockData(data.results ? data : { results: data || [], count: data.length || 0 });
         } catch (err) { setStockData({ results: [], count: 0 }); }
         finally { if (showLoading) setLoading(false); }
-    }, [page, rowsPerPage, filterSupplier]);
+    }, [page, rowsPerPage, filterSupplier, inventorySearch]); // Add dependency
 
     const fetchSuppliers = useCallback(async () => {
         try {
@@ -282,9 +284,9 @@ const Pharmacy = () => {
             hsn: product.hsn || '',
             manufacturer: product.manufacturer || '',
             tablets_per_strip: product.tablets_per_strip || 1,
-            gst_percent: product.gst_percent || 0,
+            gst_percent: parseFloat(product.gst_percent) || 0, // Fix: Ensure 5.00 becomes 5 to match <select>
             mrp: product.mrp || 0,
-            purchase_rate: product.purchase_rate || 0,
+            purchase_rate: parseFloat(product.ptr || product.purchase_rate) || 0,
             // Keep other fields valid
             batch_no: newItems[rowIdx].batch_no,
             expiry_date: newItems[rowIdx].expiry_date,
@@ -308,8 +310,8 @@ const Pharmacy = () => {
                     expiry_date: '',
                     qty: 1,
                     free_qty: 0,
-                    purchase_rate: existing.purchase_rate || 0,
-                    ptr: existing.purchase_rate || 0,
+                    purchase_rate: parseFloat(existing.ptr || existing.purchase_rate) || 0,
+                    ptr: parseFloat(existing.ptr || existing.purchase_rate) || 0,
                     mrp: existing.mrp,
                     gst_percent: existing.gst_percent || 0, // Auto-fill GST
                     manufacturer: existing.manufacturer,
@@ -451,7 +453,17 @@ const Pharmacy = () => {
         let visitId = selectedPatient?.v_id || null;
         if (!visitId && selectedPatient) { const matchInQueue = pendingVisits.find(v => v.patient === selectedPatient.id || (v.patient?.id === selectedPatient.id) || v.patient_name === selectedPatient.full_name); if (matchInQueue) visitId = matchInQueue.id || matchInQueue.v_id; }
         const payload = { visit: visitId, patient: selectedPatient?.p_id || selectedPatient?.id || null, items: cart.map(item => ({ med_stock: item.med_id || item.id, qty: item.qty, unit_price: parseFloat(item.selling_price.toFixed(2)), gst_percent: item.gst_applied || 0 })), payment_status: 'PENDING' };
-        try { const { data } = await api.post('pharmacy/sales/', payload); setLastSale({ ...data, patient: selectedPatient, doctor: selectedDoctor, details: cart }); if (visitId) { await api.patch(`reception/visits/${visitId}/`, { status: 'OPEN', assigned_role: 'BILLING' }); fetchPendingVisits(); } setCart([]); setMedSearch(''); setMedResults([]); setSelectedPatient(null); setSelectedDoctor(null); showToast('success', 'Sent to Billing.'); } catch (err) { showToast('error', "Transaction failed"); }
+        try {
+            const { data } = await api.post('pharmacy/sales/', payload);
+            setLastSale({ ...data, patient: selectedPatient, doctor: selectedDoctor, details: cart });
+            if (visitId) { await api.patch(`reception/visits/${visitId}/`, { status: 'OPEN', assigned_role: 'BILLING' }); fetchPendingVisits(); }
+            setCart([]); setMedSearch(''); setMedResults([]); setSelectedPatient(null); setSelectedDoctor(null);
+            showToast('success', 'Sent to Billing.');
+        } catch (err) {
+            console.error(err);
+            const errorMsg = Object.values(err.response?.data || {}).flat().join(' ') || "Transaction failed";
+            showToast('error', errorMsg);
+        }
     };
     const loadPrescription = async (visit) => {
         setSelectedPatient({ ...visit.patient, full_name: visit.patient_name, v_id: visit.id });
@@ -610,6 +622,15 @@ const Pharmacy = () => {
                 </div>
                 {activeTab === 'inventory' && (
                     <div className="flex gap-3">
+                        <div className="relative group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
+                            <input
+                                className="pl-9 pr-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-bold shadow-sm w-64 transition-all"
+                                placeholder="Search inventory..."
+                                value={inventorySearch}
+                                onChange={(e) => setInventorySearch(e.target.value)}
+                            />
+                        </div>
                         <select className="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none font-bold shadow-sm" value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}>
                             <option value="">Filter: All Suppliers</option>
                             {suppliers.map(s => <option key={s.id} value={s.id}>{s.supplier_name}</option>)}
@@ -655,8 +676,17 @@ const Pharmacy = () => {
                                             </td>
                                             <td className="px-6 py-3 font-bold text-sm text-slate-500">
                                                 <div className="flex flex-col">
-                                                    <span>₹{s.purchase_rate} <span className="text-[8px] text-slate-400 uppercase">/Strip</span></span>
-                                                    <span className="text-[10px] text-slate-400 font-normal">₹{(s.purchase_rate / (s.tablets_per_strip || 1)).toFixed(2)} /Tab</span>
+                                                    {(() => {
+                                                        const ptrVal = parseFloat(s.ptr || 0);
+                                                        const rateVal = parseFloat(s.purchase_rate || 0);
+                                                        const displayRate = ptrVal > 0 ? ptrVal : rateVal;
+                                                        return (
+                                                            <>
+                                                                <span>₹{displayRate.toFixed(2)} <span className="text-[8px] text-slate-400 uppercase">/Strip</span></span>
+                                                                <span className="text-[10px] text-slate-400 font-normal">₹{(displayRate / (s.tablets_per_strip || 1)).toFixed(2)} /Tab</span>
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 font-black text-sm text-blue-600">

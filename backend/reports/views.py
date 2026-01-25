@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 
 from patients.models import Visit
 from billing.models import Invoice, InvoiceItem
-from pharmacy.models import PharmacySale, PharmacySaleItem, PharmacyStock, PurchaseInvoice, PurchaseItem, Supplier
+from pharmacy.models import PharmacySale, PharmacySaleItem, PharmacyStock, PurchaseInvoice, PurchaseItem, Supplier, PharmacyReturn
 from lab.models import LabCharge, LabInventoryLog, LabPurchase, LabPurchaseItem
 from medical.models import DoctorNote
 from django.db.models.functions import TruncDate
@@ -118,9 +118,20 @@ class FinancialReportView(BaseReportView):
             visit__isnull=True
         )
 
-        billing_revenue = invoices.aggregate(total=Sum('total_amount'))['total'] or 0
-        pharmacy_revenue = pharmacy_sales.aggregate(total=Sum('total_amount'))['total'] or 0
-        total_revenue = float(billing_revenue) + float(pharmacy_revenue)
+        billing_gross = invoices.aggregate(total=Sum('total_amount'))['total'] or 0
+        billing_refunds = invoices.aggregate(total=Sum('refund_amount'))['total'] or 0
+        billing_revenue = float(billing_gross) - float(billing_refunds)
+
+        pharmacy_gross = pharmacy_sales.aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        # Deduct refunds for independent pharmacy sales
+        # We find returns linked to the sales in this period
+        pharmacy_refunds = PharmacyReturn.objects.filter(
+            sale__in=pharmacy_sales
+        ).aggregate(total=Sum('total_refund_amount'))['total'] or 0
+
+        pharmacy_revenue = float(pharmacy_gross) - float(pharmacy_refunds)
+        total_revenue = billing_revenue + pharmacy_revenue
 
         # 2. EXPENSES (COGS)
         # 2. EXPENSES (COGS)
@@ -323,7 +334,22 @@ class ProfitAnalyticsView(APIView):
             created_at__lte=current_month_end
         ).aggregate(total=Sum('amount'))['total'] or 0
         
-        current_total = float(current_billing) + float(current_pharmacy) + float(current_lab)
+        # Calculate refunds for current month
+        current_billing_refunds = Invoice.objects.filter(
+            created_at__gte=current_month_start,
+            created_at__lte=current_month_end
+        ).aggregate(total=Sum('refund_amount'))['total'] or 0
+        
+        current_pharmacy_refunds = PharmacyReturn.objects.filter(
+            sale__created_at__gte=current_month_start,
+            sale__created_at__lte=current_month_end
+        ).aggregate(total=Sum('total_refund_amount'))['total'] or 0
+
+        # Net Revenues
+        current_billing = float(current_billing) - float(current_billing_refunds)
+        current_pharmacy = float(current_pharmacy) - float(current_pharmacy_refunds)
+        
+        current_total = current_billing + current_pharmacy + float(current_lab)
         
         # Calculate revenue for previous month
         previous_billing = Invoice.objects.filter(
@@ -332,17 +358,31 @@ class ProfitAnalyticsView(APIView):
             payment_status='PAID'
         ).aggregate(total=Sum('total_amount'))['total'] or 0
         
+        previous_billing_refunds = Invoice.objects.filter(
+            created_at__gte=previous_month_start,
+            created_at__lte=previous_month_end
+        ).aggregate(total=Sum('refund_amount'))['total'] or 0
+        
+        previous_billing = float(previous_billing) - float(previous_billing_refunds)
+        
         previous_pharmacy = PharmacySale.objects.filter(
             created_at__gte=previous_month_start,
             created_at__lte=previous_month_end
         ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        previous_pharmacy_refunds = PharmacyReturn.objects.filter(
+            sale__created_at__gte=previous_month_start,
+            sale__created_at__lte=previous_month_end
+        ).aggregate(total=Sum('total_refund_amount'))['total'] or 0
+        
+        previous_pharmacy = float(previous_pharmacy) - float(previous_pharmacy_refunds)
         
         previous_lab = LabCharge.objects.filter(
             created_at__gte=previous_month_start,
             created_at__lte=previous_month_end
         ).aggregate(total=Sum('amount'))['total'] or 0
         
-        previous_total = float(previous_billing) + float(previous_pharmacy) + float(previous_lab)
+        previous_total = previous_billing + previous_pharmacy + float(previous_lab)
         
         # Calculate growth percentage
         if previous_total > 0:
