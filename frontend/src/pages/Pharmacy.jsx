@@ -286,7 +286,7 @@ const Pharmacy = () => {
             tablets_per_strip: product.tablets_per_strip || 1,
             gst_percent: parseFloat(product.gst_percent) || 0, // Fix: Ensure 5.00 becomes 5 to match <select>
             mrp: product.mrp || 0,
-            purchase_rate: parseFloat(product.ptr || product.purchase_rate) || 0,
+            purchase_rate: parseFloat(product.purchase_rate) || parseFloat(product.ptr) || 0,
             // Keep other fields valid
             batch_no: newItems[rowIdx].batch_no,
             expiry_date: newItems[rowIdx].expiry_date,
@@ -310,8 +310,8 @@ const Pharmacy = () => {
                     expiry_date: '',
                     qty: 1,
                     free_qty: 0,
-                    purchase_rate: parseFloat(existing.ptr || existing.purchase_rate) || 0,
-                    ptr: parseFloat(existing.ptr || existing.purchase_rate) || 0,
+                    purchase_rate: parseFloat(existing.purchase_rate) || parseFloat(existing.ptr) || 0,
+                    ptr: parseFloat(existing.purchase_rate) || parseFloat(existing.ptr) || 0,
                     mrp: existing.mrp,
                     gst_percent: existing.gst_percent || 0, // Auto-fill GST
                     manufacturer: existing.manufacturer,
