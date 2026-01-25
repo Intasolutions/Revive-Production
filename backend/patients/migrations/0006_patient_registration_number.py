@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='patient',
             name='registration_number',
-            field=models.CharField(default='TEMP', help_text='Manual Registration Number', max_length=50, unique=True),
+            field=models.CharField(default='TEMP', help_text='Manual Registration Number', max_length=50, null=True, blank=True),
         ),
     ]
