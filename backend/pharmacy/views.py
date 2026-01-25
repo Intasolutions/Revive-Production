@@ -459,3 +459,22 @@ class PharmacyQueueViewSet(viewsets.ReadOnlyModelViewSet):
         visit.save()
         
         return Response({"status": "Dispensed and sent to Billing"}, status=status.HTTP_200_OK)
+
+
+from .models import PharmacyReturn, PharmacyReturnItem
+from .serializers import PharmacyReturnSerializer
+
+class PharmacyReturnViewSet(viewsets.ModelViewSet):
+    queryset = PharmacyReturn.objects.all().order_by('-created_at')
+    serializer_class = PharmacyReturnSerializer
+    permission_classes = [IsPharmacyOrAdmin]
+
+    def get_queryset(self):
+        return PharmacyReturn.objects.all().order_by('-created_at')
+
+    @action(detail=False, methods=['post'])
+    @transaction.atomic
+    def process(self, request):
+        # We use standard create(), so this might not be needed unless custom logic
+        # keeping it standard via serializer.create()
+        pass

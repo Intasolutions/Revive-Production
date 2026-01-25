@@ -164,3 +164,34 @@ class PharmacySaleItem(BaseModel):
 
     def __str__(self):
         return f"{self.med_stock.name} x {self.qty}"
+
+
+class PharmacyReturn(BaseModel):
+    STATUS_CHOICES = (
+        ('APPROVED', 'Approved'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    )
+
+    sale = models.ForeignKey(PharmacySale, on_delete=models.CASCADE, related_name='returns')
+    return_date = models.DateTimeField(auto_now_add=True)
+    total_refund_amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='COMPLETED')
+    reason = models.TextField(blank=True, null=True)
+    processed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Return {self.id} (Inv: {self.sale.id})"
+
+
+class PharmacyReturnItem(BaseModel):
+    return_record = models.ForeignKey(PharmacyReturn, on_delete=models.CASCADE, related_name='items')
+    sale_item = models.ForeignKey(PharmacySaleItem, on_delete=models.CASCADE, related_name='returned_items')
+    med_stock = models.ForeignKey(PharmacyStock, on_delete=models.PROTECT) # Restock to this batch
+
+    qty_returned = models.PositiveIntegerField()
+    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    gst_reversed = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    def __str__(self):
+        return f"Ret: {self.med_stock.name} x {self.qty_returned}"

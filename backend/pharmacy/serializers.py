@@ -2,7 +2,8 @@ from django.db import transaction
 from rest_framework import serializers
 from .models import (
     Supplier, PharmacyStock, PurchaseInvoice, PurchaseItem,
-    PharmacySale, PharmacySaleItem
+    PharmacySale, PharmacySaleItem,
+    PharmacyReturn, PharmacyReturnItem
 )
 
 
@@ -85,7 +86,23 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 
             # Standard Logic: Inventory is in Tablets. 
             # item.get('qty') is now expected to be strips from frontend, factoring in TPS.
-            qty_in = ((item.get('qty') or 0) + (item.get('free_qty') or 0)) * tps
+            qty_strips = int(item.get('qty') or 0)
+            free_strips = int(item.get('free_qty') or 0)
+            billed_rate = float(item.get('purchase_rate', 0))
+            
+            qty_in = (qty_strips + free_strips) * tps
+
+            # Calculate Effective Purchase Rate for Stock Valuation (Cost Averaging)
+            # Total Cost / Total Strips
+            
+            # !CRITICAL: USER REQUIREMENT - This separation is intentional.
+            # - Invoice Total = Billed Rate * Billed Qty (Matches Supplier Invoice)
+            # - Stock Valuation = (Billed Rate * Billed Qty) / (Total Qty) (Accurate Profit Margin)
+            # DO NOT UNIFY THESE.
+            if (qty_strips + free_strips) > 0:
+                effective_purch_rate = (billed_rate * qty_strips) / (qty_strips + free_strips)
+            else:
+                effective_purch_rate = billed_rate
 
             # Stock match logic (MANDATORY): product_name + batch_no + expiry + supplier
             stock, created = PharmacyStock.objects.get_or_create(
@@ -97,7 +114,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                     'barcode': item.get('barcode', '') or '',
                     'mrp': item['mrp'],
                     'selling_price': item.get('selling_price', item['mrp']), # Use explicit selling price if permitted, else MRP
-                    'purchase_rate': item.get('purchase_rate', 0),
+                    'purchase_rate': round(effective_purch_rate, 2),
                     'qty_available': qty_in,
                     'tablets_per_strip': tps,
                     'hsn': item.get('hsn', '') or '',
@@ -114,7 +131,10 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                     stock.barcode = item['barcode']
                 stock.mrp = item['mrp']
                 stock.selling_price = item.get('selling_price', item['mrp']) # Use explicit selling price
-                stock.purchase_rate = item.get('purchase_rate', stock.purchase_rate)
+                
+                # Update purchase rate to latest effective rate (or handle weighted average if preferred, but simple update is standard here)
+                stock.purchase_rate = round(effective_purch_rate, 2)
+
                 stock.hsn = item.get('hsn', stock.hsn)
                 stock.gst_percent = gst_val # Apply Item GST
                 stock.manufacturer = item.get('manufacturer', stock.manufacturer)
@@ -256,3 +276,84 @@ class PharmacySaleSerializer(serializers.ModelSerializer):
             print(f"Socket emit error: {e}")
 
         return sale
+
+
+class PharmacyReturnItemSerializer(serializers.ModelSerializer):
+    return_item_id = serializers.UUIDField(source='id', read_only=True)
+    med_name = serializers.CharField(source='med_stock.name', read_only=True)
+    batch_no = serializers.CharField(source='med_stock.batch_no', read_only=True)
+
+    class Meta:
+        model = PharmacyReturnItem
+        fields = '__all__'
+        read_only_fields = ['return_item_id', 'created_at', 'updated_at', 'return_record', 'gst_reversed', 'refund_amount']
+
+
+class PharmacyReturnSerializer(serializers.ModelSerializer):
+    return_id = serializers.UUIDField(source='id', read_only=True)
+    # Allows creating return items in the same call
+    items = PharmacyReturnItemSerializer(many=True, read_only=True)
+    items_data = serializers.ListField(child=serializers.DictField(), write_only=True)
+
+    class Meta:
+        model = PharmacyReturn
+        fields = '__all__'
+        read_only_fields = ['return_id', 'return_date', 'total_refund_amount', 'created_at', 'updated_at', 'status', 'processed_by']
+
+    @transaction.atomic
+    def create(self, validated_data):
+        items_payload = validated_data.pop('items_data', [])
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+
+        # 1. Create Return Record
+        ret_record = PharmacyReturn.objects.create(
+            total_refund_amount=0,
+            status='COMPLETED',
+            processed_by=user,
+            **validated_data
+        )
+
+        total_refund = 0
+        
+        for item in items_payload:
+            sale_item_id = item.get('sale_item_id')
+            return_qty = int(item.get('qty', 0))
+
+            if return_qty <= 0:
+                continue
+
+            sale_item = PharmacySaleItem.objects.select_for_update().get(id=sale_item_id)
+            
+            # Validation: Check if already returned
+            already_returned = sum(item.qty_returned for item in sale_item.returned_items.all())
+            if (already_returned + return_qty) > sale_item.qty:
+                 raise serializers.ValidationError(
+                    f"Cannot return {return_qty} for {sale_item.med_stock.name}. Sold: {sale_item.qty}, Already Returned: {already_returned}"
+                )
+
+            # Calculation using ORIGINAL sale price and gst
+            refund_amt = sale_item.unit_price * return_qty
+            gst_rev = refund_amt * (sale_item.gst_percent / 100)
+            
+            total_refund += refund_amt
+
+            # 2. Update Inventory (Restock to SAME Batch)
+            med_stock = sale_item.med_stock
+            med_stock.qty_available += return_qty
+            med_stock.save()
+
+            # 3. Create Return Item Entry
+            PharmacyReturnItem.objects.create(
+                return_record=ret_record,
+                sale_item=sale_item,
+                med_stock=med_stock,
+                qty_returned=return_qty,
+                refund_amount=refund_amt,
+                gst_reversed=gst_rev
+            )
+
+        ret_record.total_refund_amount = total_refund
+        ret_record.save()
+
+        return ret_record

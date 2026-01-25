@@ -146,6 +146,13 @@ const Pharmacy = () => {
     const [scannedBarcode, setScannedBarcode] = useState('');
     const [manualProductSearch, setManualProductSearch] = useState({ rowIdx: null, results: [] });
 
+    // Returns
+    const [searchInvoiceInfo, setSearchInvoiceInfo] = useState({ id: '', patient: '', date: '' });
+    const [returnSearchTerm, setReturnSearchTerm] = useState('');
+    const [returnSaleData, setReturnSaleData] = useState(null);
+    const [returnItems, setReturnItems] = useState({}); // { sale_item_id: qty }
+    const [processingReturn, setProcessingReturn] = useState(false);
+
     // --- FETCH FUNCTIONS ---
     const fetchStock = useCallback(async (showLoading = true) => {
         if (showLoading) setLoading(true);
@@ -387,11 +394,12 @@ const Pharmacy = () => {
                         ...item,
                         qty: qty, // Backend will handle conversion to Tablets using tps
                         free_qty: free, // Backend will handle conversion to Tablets using tps
-                        // FIX: Store Per STRIP prices (Backend expects Strip Price and divides by TPS for sales)
-                        // Effective Purchase Rate per Strip (factoring in free items)
-                        // Rate * Qty(Strips) / Total Strips (Qty+Free)
-                        purchase_rate: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / (qty + free)).toFixed(2)),
-                        ptr: parseFloat((((parseFloat(item.purchase_rate) || 0) * qty) / (qty + free)).toFixed(2)),
+                        // FIX: Send RAW Per Strip prices (Backend expects Strip Price and divides by TPS for sales)
+                        // Do NOT reduce the rate here. Let backend handle effective cost for Stock if needed.
+                        // !CRITICAL: USER REQUIREMENT - DO NOT CHANGE THIS LOGIC. 
+                        // Invoice Total MUST Match Supplier Bill exactly. Free qty should NOT reduce invoice amount.
+                        purchase_rate: parseFloat((parseFloat(item.purchase_rate) || 0).toFixed(2)),
+                        ptr: parseFloat((parseFloat(item.purchase_rate) || 0).toFixed(2)),
                         mrp: parseFloat((parseFloat(item.mrp) || 0).toFixed(2)), // Keep as Strip MRP
                         selling_price: parseFloat((manualTabPrice * tps).toFixed(2)) // Convert Manual Tab Price -> Strip Price for backend
                     };
@@ -511,6 +519,80 @@ const Pharmacy = () => {
         }
     };
 
+    // --- RETURNS LOGIC ---
+    const handleSearchSale = async () => {
+        if (!returnSearchTerm) return;
+        setLoading(true);
+        try {
+            // Support searching by full ID or last 6 characters
+            const { data } = await api.get(`pharmacy/sales/?search=${returnSearchTerm}`);
+            const results = data.results || data;
+
+            // Try to find exact match first, else take first result
+            const match = results.find(r => r.id === returnSearchTerm || r.id.endsWith(returnSearchTerm)) || results[0];
+
+            if (match) {
+                setReturnSaleData(match);
+                setReturnItems({}); // Reset selections
+                showToast('success', 'Invoice Found');
+            } else {
+                setReturnSaleData(null);
+                showToast('error', 'Invoice Not Found');
+            }
+        } catch (err) {
+            console.error(err);
+            setReturnSaleData(null);
+            showToast('error', 'Search failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleProcessReturn = async () => {
+        if (!returnSaleData) return;
+
+        const itemsPayload = Object.entries(returnItems)
+            .filter(([_, qty]) => qty > 0)
+            .map(([itemId, qty]) => ({
+                sale_item_id: itemId,
+                qty: parseInt(qty)
+            }));
+
+        if (itemsPayload.length === 0) {
+            showToast('error', 'Please select items to return');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to process this return? Stock will be restored and refund calculated.')) return;
+
+        setProcessingReturn(true);
+        try {
+            await api.post('pharmacy/returns/', {
+                sale: returnSaleData.id,
+                items_data: itemsPayload
+            });
+            showToast('success', 'Return Processed Successfully!');
+            setReturnSaleData(null); // Clear form
+            setReturnItems({});
+            setReturnSearchTerm('');
+            fetchStock(); // Update inventory
+        } catch (err) {
+            console.error(err);
+            const msg = err.response?.data?.error || err.response?.data?.detail || "Return Failed";
+            // If validation error from serializer (e.g. loops)
+            if (typeof err.response?.data === 'object') {
+                // flatten
+                const flat = Object.values(err.response.data).join(', ');
+                if (flat) showToast('error', flat.substring(0, 100));
+                else showToast('error', msg);
+            } else {
+                showToast('error', msg);
+            }
+        } finally {
+            setProcessingReturn(false);
+        }
+    };
+
     return (
         <div className="p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen bg-[#F8FAFC] font-sans text-slate-900 flex flex-col overflow-hidden">
 
@@ -519,7 +601,7 @@ const Pharmacy = () => {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-950 font-outfit uppercase">Pharmacy</h1>
                     <div className="flex items-center gap-6 mt-2">
-                        {['inventory', 'pos', 'purchases'].map(tab => (
+                        {['inventory', 'pos', 'purchases', 'returns'].map(tab => (
                             <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-1 text-sm font-bold transition-all border-b-2 ${activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}>
                                 {tab === 'pos' ? 'Billing Terminal (POS)' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                             </button>
@@ -773,6 +855,120 @@ const Pharmacy = () => {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 4. RETURNS TAB */}
+                {activeTab === 'returns' && (
+                    <div className="flex h-full divide-x divide-slate-100 bg-white">
+                        <div className="w-full flex flex-col items-center justify-start p-12 overflow-y-auto">
+                            <div className="w-full max-w-4xl space-y-8">
+                                <div className="text-center mb-8">
+                                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-widest">Sales Return & Refund</h2>
+                                    <p className="text-sm font-bold text-slate-400 mt-1">Process customer returns and restore inventory</p>
+                                </div>
+
+                                {/* Search Bar */}
+                                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 shadow-sm flex gap-4">
+                                    <div className="flex-1 relative">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                        <input
+                                            className="w-full pl-12 pr-4 py-4 bg-white border-2 border-slate-200 rounded-2xl text-lg font-bold outline-none focus:border-blue-500 transition-all font-mono placeholder:font-sans"
+                                            placeholder="Enter Invoice ID (e.g. INV-123456)..."
+                                            value={returnSearchTerm}
+                                            onChange={(e) => setReturnSearchTerm(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleSearchSale()}
+                                        />
+                                    </div>
+                                    <button onClick={handleSearchSale} disabled={loading} className="px-8 bg-slate-900 text-white font-bold rounded-2xl shadow-lg hover:bg-slate-800 transition-all">
+                                        {loading ? 'Searching...' : 'Find Invoice'}
+                                    </button>
+                                </div>
+
+                                {/* Results Area */}
+                                {returnSaleData && (
+                                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white border border-slate-200 rounded-[2rem] shadow-xl overflow-hidden">
+
+                                        {/* Invoice Header */}
+                                        <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
+                                            <div>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-black uppercase tracking-wider">Valid Invoice</span>
+                                                    <span className="text-slate-400 text-xs font-bold uppercase">{new Date(returnSaleData.sale_date).toLocaleString()}</span>
+                                                </div>
+                                                <h3 className="text-3xl font-black text-slate-900 font-mono">#{returnSaleData.id.slice(0, 8).toUpperCase()}</h3>
+                                                <p className="text-sm font-bold text-slate-500 mt-1">Billed To: <span className="text-slate-900">{returnSaleData.patient_name || "Guest"}</span></p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Total Paid</p>
+                                                <p className="text-2xl font-black text-slate-900">₹{returnSaleData.total_amount}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Items Table */}
+                                        <div className="p-8">
+                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Select Items to Return</h4>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left">
+                                                    <thead className="bg-slate-50/50 text-slate-400 text-xs font-black uppercase tracking-widest">
+                                                        <tr>
+                                                            <th className="px-4 py-3 rounded-l-xl">Item</th>
+                                                            <th className="px-4 py-3">Batch</th>
+                                                            <th className="px-4 py-3 text-center">Orig. Price</th>
+                                                            <th className="px-4 py-3 text-center">Qty Sold</th>
+                                                            <th className="px-4 py-3 text-center w-32 bg-blue-50/50 text-blue-600 rounded-r-xl">Return Qty</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-50 text-sm font-bold text-slate-600">
+                                                        {returnSaleData.items.map(item => (
+                                                            <tr key={item.id} className="hover:bg-slate-50">
+                                                                <td className="px-4 py-4 text-slate-900">{item.med_name}</td>
+                                                                <td className="px-4 py-4 font-mono text-xs">{item.batch_no}</td>
+                                                                <td className="px-4 py-4 text-center">₹{item.unit_price} <span className="text-[10px] text-slate-400">({item.gst_percent}% GST)</span></td>
+                                                                <td className="px-4 py-4 text-center">{item.qty}</td>
+                                                                <td className="px-4 py-4 text-center">
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        max={item.qty}
+                                                                        className="w-20 text-center bg-blue-50 border border-blue-100 rounded-lg py-2 font-bold text-blue-700 outline-none focus:ring-2 focus:ring-blue-500"
+                                                                        placeholder="0"
+                                                                        value={returnItems[item.id] || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = Math.min(parseInt(e.target.value) || 0, item.qty);
+                                                                            setReturnItems(prev => ({ ...prev, [item.id]: val }));
+                                                                        }}
+                                                                    />
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Footer */}
+                                        <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-4">
+                                            <div className="flex-1">
+                                                <p className="text-xs font-bold text-slate-500 italic">
+                                                    * Processing a return will automatically restore stock to the original batch and calculate the GST reversal based on original invoice values.
+                                                </p>
+                                            </div>
+                                            <button onClick={() => setReturnSaleData(null)} className="px-6 py-3 font-bold text-slate-500 hover:bg-white rounded-xl transition-all">Cancel</button>
+                                            <button
+                                                onClick={handleProcessReturn}
+                                                disabled={processingReturn}
+                                                className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-2"
+                                            >
+                                                {processingReturn ? 'Processing...' : <><CheckCircle2 size={18} /> Confirm Refund</>}
+                                            </button>
+                                        </div>
+
+                                    </motion.div>
+                                )}
+
                             </div>
                         </div>
                     </div>
