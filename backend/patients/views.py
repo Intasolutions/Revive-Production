@@ -60,6 +60,9 @@ class PatientViewSet(viewsets.ModelViewSet):
         return Response(PatientSerializer(patient).data, status=status.HTTP_201_CREATED)
 
 
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
 class VisitViewSet(viewsets.ModelViewSet):
     queryset = Visit.objects.all().order_by('-created_at')
     serializer_class = VisitSerializer
@@ -74,6 +77,32 @@ class VisitViewSet(viewsets.ModelViewSet):
     }
     search_fields = ['patient__full_name', 'patient__phone']
     ordering_fields = ['created_at', 'updated_at']
+
+    @action(detail=False, methods=['get'])
+    def casualty_history(self, request):
+        """
+        Returns all visits that have passed through Casualty 
+        (i.e., have at least one CasualtyLog entry).
+        """
+        from casualty.models import CasualtyLog
+        # Get distinct visits that have logs
+        # We can also filter by assigned_role='CASUALTY' but that only gets CURRENT ones.
+        # We want PAST history.
+        # Efficient query: Visits where id is in the set of log visits.
+        
+        # Method 1 using distinct (might be slow on huge DBs but fine here)
+        # visits = Visit.objects.filter(casualty_logs__isnull=False).distinct().order_by('-created_at')
+        
+        # Method 2: Reverse query
+        visits = Visit.objects.filter(casualty_logs__isnull=False).order_by('-created_at').distinct()
+        
+        page = self.paginate_queryset(visits)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(visits, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         visit = serializer.save()

@@ -29,6 +29,8 @@ class InvoiceItem(BaseModel):
     gst_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    stock_deducted = models.BooleanField(default=False)
+    deducted_qty = models.IntegerField(default=0)
 
     def __str__(self):
         return f"{self.dept}: {self.description}"

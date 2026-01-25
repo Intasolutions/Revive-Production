@@ -27,46 +27,55 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        invoice = Invoice.objects.create(**validated_data)
+        for item_data in items_data:
+            InvoiceItem.objects.create(invoice=invoice, **item_data)
+        
+        # Emit Socket Event
         try:
-            items_data = validated_data.pop('items', [])
-            invoice = Invoice.objects.create(**validated_data)
-            for item_data in items_data:
-                # Remove non-model fields that might be sent from frontend
-                item_data.pop('stock_deducted', None) 
-                InvoiceItem.objects.create(invoice=invoice, **item_data)
-            
-            # Emit Socket Event
-            try:
-                from asgiref.sync import async_to_sync
-                from revive_cms.sio import sio
-                async_to_sync(sio.emit)('billing_update', {
-                    'invoice_id': str(invoice.id),
-                    'amount': float(invoice.total_amount),
-                    'status': invoice.payment_status
-                })
-            except Exception as e:
-                print(f"Socket emit error: {e}")
-
-            return invoice
+            from asgiref.sync import async_to_sync
+            from revive_cms.sio import sio
+            async_to_sync(sio.emit)('billing_update', {
+                'invoice_id': str(invoice.id),
+                'amount': float(invoice.total_amount),
+                'status': invoice.payment_status
+            })
         except Exception as e:
-            print(f"Error creating invoice: {str(e)}")
-            raise serializers.ValidationError(f"Creation failed: {str(e)}")
+            print(f"Socket emit error: {e}")
+
+        return invoice
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         
-        # Update Invoice Instance
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Update Items if provided
         if items_data is not None:
-            # Simplest approach: Remove old items and re-create new ones
-            instance.items.all().delete()
+            # Sync Items: Keep existing, create new, remove missing
+            keep_ids = []
             for item_data in items_data:
-                item_data.pop('stock_deducted', None)
-                InvoiceItem.objects.create(invoice=instance, **item_data)
+                item_id = item_data.get('id')
+                if item_id:
+                    item_instance = InvoiceItem.objects.filter(id=item_id, invoice=instance).first()
+                    if item_instance:
+                        for attr, value in item_data.items():
+                            setattr(item_instance, attr, value)
+                        item_instance.save()
+                        keep_ids.append(item_instance.id)
+                    else:
+                        # Fallback: create if ID not found but provided (unlikely)
+                        new_item = InvoiceItem.objects.create(invoice=instance, **item_data)
+                        keep_ids.append(new_item.id)
+                else:
+                    # New item
+                    new_item = InvoiceItem.objects.create(invoice=instance, **item_data)
+                    keep_ids.append(new_item.id)
+            
+            # Remove missing items
+            instance.items.exclude(id__in=keep_ids).delete()
         
         # Emit Socket Event
         try:

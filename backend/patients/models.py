@@ -46,6 +46,7 @@ class Visit(BaseModel):
             ('DOCTOR', 'Doctor'),
             ('LAB', 'Lab'),
             ('PHARMACY', 'Pharmacy'),
+            ('BILLING', 'Billing'),
             ('CASUALTY', 'Casualty'),
         ), 
         default='DOCTOR'

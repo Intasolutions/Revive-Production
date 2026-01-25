@@ -31,6 +31,7 @@ const Billing = () => {
     const [patients, setPatients] = useState([]);
     const [pharmacyStock, setPharmacyStock] = useState([]);
     const [selectedPatientId, setSelectedPatientId] = useState(null);
+    const [stockSearch, setStockSearch] = useState({ index: -1, term: "" });
 
     const [formData, setFormData] = useState({
         patient_name: "",
@@ -129,6 +130,35 @@ const Billing = () => {
         } catch (err) { console.error(err); }
     };
 
+    // --- Stock Search Logic ---
+    const handleSelectStock = (stock, index) => {
+        const newItems = [...formData.items];
+        // Calculate unit price from selling_price / tablets_per_strip
+        const tps = stock.tablets_per_strip || 1;
+        const unitPrice = parseFloat(stock.selling_price) / tps;
+        const qty = parseFloat(newItems[index].qty) || 1;
+
+        newItems[index] = {
+            ...newItems[index],
+            description: stock.name,
+            batch: stock.batch_no,
+            unit_price: unitPrice.toFixed(2),
+            qty: qty, // Ensure qty is preserved/set
+            amount: (qty * unitPrice).toFixed(2),
+            hsn: stock.hsn || "",
+            gst_percent: stock.gst_percent || 0,
+            expiry: stock.expiry_date || "",
+            stock_deducted: false,
+            deducted_qty: 0
+        };
+        setFormData({ ...formData, items: newItems });
+        setStockSearch({ index: -1, term: "" });
+    };
+
+    const filteredStock = stockSearch.term.length >= 2
+        ? pharmacyStock.filter(s => s.name.toLowerCase().includes(stockSearch.term.toLowerCase())).slice(0, 8)
+        : [];
+
     // --- Logic ---
     const handleBillNow = async (visit) => {
         const patId = (visit.patient && typeof visit.patient === 'object') ? visit.patient.id : visit.patient;
@@ -141,11 +171,8 @@ const Billing = () => {
             if (foundDoctor) doctorToSet = foundDoctor.id;
         }
 
-        const existing = invoices.find(inv => (inv.visit === visit.id || inv.visit === visit.v_id) && inv.payment_status === 'PENDING');
-        if (existing) {
-            handleEditInvoice(existing);
-            return;
-        }
+        // Note: visits in 'Ready for Billing' section don't have invoices yet (enforced by backend query)
+        // If we ever need to support re-billing, we would search for an existing invoice here.
 
         const newFormData = {
             patient_name: patientName,
@@ -157,7 +184,7 @@ const Billing = () => {
         }
 
         const isPharmacyVisit = visit.vitals && visit.vitals.note === 'Auto-created from Pharmacy Manual Sale';
-        if (visit.doctor_name && visit.doctor_name !== "Not Assigned" && !isPharmacyVisit) {
+        if (visit.doctor_name && visit.doctor_name !== "Not Assigned" && !isPharmacyVisit && visit.doctor) {
             const fee = visit.consultation_fee ? parseFloat(visit.consultation_fee) : 500;
             newFormData.items.push({ dept: "CONSULTATION", description: "General Consultation Fee", qty: 1, unit_price: fee, amount: fee, hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: "" });
         }
@@ -174,11 +201,50 @@ const Billing = () => {
                 // Note: pharmacy_items from backend are already at tablet level prices if processed by PharmacySale
                 newFormData.items.push({
                     dept: "PHARMACY", description: item.name, qty: item.qty, unit_price: parseFloat(item.unit_price), amount: parseFloat(item.amount),
-                    hsn: item.hsn || "", batch: item.batch || "", gst_percent: item.gst || 0, expiry: "", dosage: item.dosage || "", duration: item.duration || ""
+                    hsn: item.hsn || "", batch: item.batch || "", gst_percent: item.gst || 0, expiry: "", dosage: item.dosage || "", duration: item.duration || "",
+                    hsn: item.hsn || "", batch: item.batch || "", gst_percent: item.gst || 0, expiry: "", dosage: item.dosage || "", duration: "",
+                    stock_deducted: true,
+                    deducted_qty: item.qty
                 });
             });
             console.log("=== END PHARMACY ITEMS ===");
-        } else if (newFormData.items.length === 0) {
+        }
+
+        if (visit.casualty_medicines && visit.casualty_medicines.length > 0) {
+            visit.casualty_medicines.forEach(item => {
+                newFormData.items.push({
+                    dept: "PHARMACY", description: item.name, qty: item.qty, unit_price: parseFloat(item.unit_price), amount: parseFloat(item.total_price),
+                    hsn: item.hsn || "", batch: item.batch || "", gst_percent: item.gst || 0, expiry: "", dosage: item.dosage || "", duration: "",
+                    stock_deducted: true,
+                    deducted_qty: item.qty
+                });
+            });
+        }
+
+        if (visit.casualty_services && visit.casualty_services.length > 0) {
+            visit.casualty_services.forEach(item => {
+                newFormData.items.push({
+                    dept: "CASUALTY", description: item.name, qty: item.qty, unit_price: parseFloat(item.unit_charge), amount: parseFloat(item.total_charge),
+                    hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: ""
+                });
+            });
+        }
+
+        if (visit.casualty_observations && visit.casualty_observations.length > 0) {
+            visit.casualty_observations.forEach(obs => {
+                if (obs.is_active || obs.end_time) {
+                    const hours = (obs.planned_duration_minutes / 60).toFixed(1);
+                    const chargePerHr = 500; // Hardcoded or fetch from settings? Using 500 as per init.
+                    const obsAmount = Math.ceil(hours * chargePerHr);
+                    newFormData.items.push({
+                        dept: "CASUALTY", description: `Observation Charges (${hours} hrs)`, qty: 1, unit_price: obsAmount, amount: obsAmount,
+                        hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: ""
+                    });
+                }
+            });
+        }
+
+        if (newFormData.items.length === 0) {
             newFormData.items.push({ dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: "" });
         }
 
@@ -279,7 +345,9 @@ const Billing = () => {
                             gst_percent: gstPercent,
                             expiry: expiry,
                             dosage: p.details || "",
-                            duration: ""
+                            duration: "",
+                            stock_deducted: !!pharmacyRecord,
+                            deducted_qty: pharmacyRecord ? pharmacyRecord.qty : 0
                         });
                         addedMedNames.add(medName.toLowerCase());
                     });
@@ -303,7 +371,9 @@ const Billing = () => {
                         gst_percent: item.gst || 0,
                         expiry: "", // Serializer doesn't pass expiry yet?
                         dosage: item.dosage || "",
-                        duration: item.duration || ""
+                        duration: item.duration || "",
+                        stock_deducted: true,
+                        deducted_qty: item.qty
                     });
                     addedMedNames.add(medName.toLowerCase());
                 });
@@ -317,7 +387,7 @@ const Billing = () => {
         }
     };
 
-    const calculateSubtotal = (items) => items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const calculateSubtotal = (items) => (items || []).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
     const handleCreateInvoice = async () => {
         const subtotal = calculateSubtotal(formData.items);
@@ -325,7 +395,7 @@ const Billing = () => {
             patient_name: formData.patient_name,
             payment_status: formData.payment_status,
             total_amount: subtotal.toFixed(2),
-            items: formData.items.map(({ id, created_at, updated_at, ...rest }) => rest),
+            items: formData.items.map(({ id, created_at, updated_at, ...rest }) => ({ ...rest, id })),
             visit: formData.visit
         };
 
@@ -339,18 +409,96 @@ const Billing = () => {
         } catch (err) { showToast('error', "Failed to save invoice."); }
     };
 
-    const handleEditInvoice = (invoice) => {
-        setFormData({
-            id: invoice.id,
-            patient_name: invoice.patient_name,
-            visit: invoice.visit,
-            doctor: formData.doctor,
-            doctor_display_name: invoice.doctor_display_name || "",
-            payment_status: invoice.payment_status,
-            items: invoice.items.map(i => ({ ...i }))
-        });
-        if (invoice.patient_id) setSelectedPatientId(invoice.patient_id);
-        setShowModal(true);
+    const handleEditInvoice = async (invoice) => {
+        setLoading(true);
+        try {
+            const vId = invoice.visit && typeof invoice.visit === 'object' ? invoice.visit.id : invoice.visit;
+            let visitData = null;
+
+            if (vId) {
+                const res = await api.get(`/reception/visits/${vId}/`);
+                visitData = res.data;
+            }
+
+            let baseItems = invoice.items.map(i => ({ ...i }));
+
+            // Cleanup: remove consultation fee if no doctor
+            if (visitData && !visitData.doctor) {
+                baseItems = baseItems.filter(i => i.dept !== 'CONSULTATION' && i.description !== 'General Consultation Fee');
+            }
+
+            // Sync Pharmacy Items
+            const visitPharmacyItems = ((visitData && visitData.pharmacy_items) || []).map(item => ({
+                dept: "PHARMACY",
+                description: item.name,
+                qty: item.qty,
+                unit_price: parseFloat(item.unit_price),
+                amount: parseFloat(item.amount),
+                hsn: item.hsn || "",
+                batch: item.batch || "",
+                gst_percent: item.gst || 0,
+                dosage: item.dosage || "",
+                duration: item.duration || "",
+                stock_deducted: true,
+                deducted_qty: item.qty
+            }));
+
+            // Sync Casualty Items
+            const visitCasualtyMedicines = ((visitData && visitData.casualty_medicines) || []).map(item => ({
+                dept: "PHARMACY",
+                description: item.name,
+                qty: item.qty,
+                unit_price: parseFloat(item.unit_price),
+                amount: parseFloat(item.total_price),
+                hsn: item.hsn || "",
+                batch: item.batch || "",
+                gst_percent: item.gst || 0,
+                dosage: item.dosage || "",
+                duration: "",
+                stock_deducted: true,
+                deducted_qty: item.qty
+            }));
+
+            const visitCasualtyServices = ((visitData && visitData.casualty_services) || []).map(item => ({
+                dept: "CASUALTY",
+                description: item.name,
+                qty: item.qty,
+                unit_price: parseFloat(item.unit_charge),
+                amount: parseFloat(item.total_charge),
+                hsn: "",
+                batch: "",
+                gst_percent: 0,
+                stock_deducted: false,
+                deducted_qty: 0
+            }));
+
+            // Note: Observations are usually one-time add. Re-syncing logic might duplicate if not careful.
+            // For now, simpler to just append them if not present, OR rely on initial creation.
+            // Let's rely on standard item merging logic below.
+
+            const existingKeys = new Set(baseItems.map(i => `${i.description}-${i.batch}`));
+            const uniquePharmacyItems = visitPharmacyItems.filter(i => !existingKeys.has(`${i.description}-${i.batch}`));
+
+            setFormData({
+                id: invoice.id,
+                patient_name: invoice.patient_name,
+                visit: invoice.visit,
+                doctor: invoice.doctor || (visitData ? visitData.doctor : ""),
+                doctor_display_name: invoice.doctor_display_name || (visitData ? visitData.doctor_name : "") || "Not Assigned",
+                payment_status: invoice.payment_status,
+                items: [...baseItems.map(i => ({ ...i, stock_deducted: true })), ...uniquePharmacyItems, ...visitCasualtyMedicines, ...visitCasualtyServices]
+            });
+
+            if (invoice.patient_id || (visitData && visitData.patient)) {
+                setSelectedPatientId(invoice.patient_id || (visitData && visitData.patient?.id) || visitData.patient);
+            }
+            setShowModal(true);
+        } catch (err) {
+            console.error("Error editing invoice:", err);
+            showToast('error', "Failed to load latest invoice details.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleMarkAsPaid = async (invoice) => {
@@ -597,12 +745,33 @@ const Billing = () => {
                                 <div className="grid grid-cols-2 gap-12 mb-12">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Billed To</label>
+                                        {!formData.id && (
+                                            <div className="relative mb-2 no-print">
+                                                <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                                    <Search size={14} className="text-slate-400" />
+                                                    <input
+                                                        className="bg-transparent outline-none text-xs font-bold w-full"
+                                                        placeholder="Search patient..."
+                                                        onChange={(e) => {
+                                                            const term = e.target.value.toLowerCase();
+                                                            const found = patients.find(p => p.full_name?.toLowerCase().includes(term));
+                                                            if (found) {
+                                                                setFormData(prev => ({ ...prev, patient_name: found.full_name }));
+                                                                setSelectedPatientId(found.id);
+                                                            } else {
+                                                                setFormData(prev => ({ ...prev, patient_name: e.target.value }));
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="text-lg font-bold text-slate-900">{formData.patient_name || "Unknown Patient"}</div>
                                         <div className="text-xs text-slate-500 mt-1">Patient ID: {selectedPatientId || 'N/A'}</div>
                                     </div>
                                     <div className="text-right">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Doctor</label>
-                                        <div className="text-lg font-bold text-slate-900">{formData.doctor_display_name || "General"}</div>
+                                        <div className="text-lg font-bold text-slate-900">{formData.doctor_display_name || "Not Assigned"}</div>
                                     </div>
                                 </div>
 
@@ -624,17 +793,51 @@ const Billing = () => {
                                             {formData.items.map((item, idx) => (
                                                 <tr key={idx} className="group">
                                                     <td className="py-4 text-slate-400 font-mono">{idx + 1}</td>
-                                                    <td className="py-4">
+                                                    <td className="py-4 relative">
                                                         <input
                                                             className="w-full bg-transparent outline-none font-bold text-slate-700 placeholder:text-slate-300 print:placeholder-transparent"
                                                             placeholder="Item Name / Service"
                                                             value={item.description}
                                                             onChange={(e) => {
+                                                                const val = e.target.value;
                                                                 const newItems = [...formData.items];
-                                                                newItems[idx].description = e.target.value;
+                                                                newItems[idx].description = val;
                                                                 setFormData({ ...formData, items: newItems });
+                                                                setStockSearch({ index: idx, term: val });
+                                                            }}
+                                                            onFocus={() => {
+                                                                if (item.description.length >= 2) {
+                                                                    setStockSearch({ index: idx, term: item.description });
+                                                                }
                                                             }}
                                                         />
+                                                        {stockSearch.index === idx && filteredStock.length > 0 && (
+                                                            <div className="absolute top-full left-0 z-[60] w-[320px] bg-white border border-slate-200 rounded-xl shadow-2xl py-2 mt-1 no-print overflow-hidden">
+                                                                {filteredStock.map(stock => (
+                                                                    <button
+                                                                        key={stock.med_id || stock.id}
+                                                                        onClick={() => handleSelectStock(stock, idx)}
+                                                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between group transition-colors"
+                                                                    >
+                                                                        <div>
+                                                                            <p className="text-sm font-bold text-slate-800">{stock.name}</p>
+                                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Batch: {stock.batch_no}</span>
+                                                                                <span className="text-[10px] font-bold text-emerald-500">{stock.qty_available} in stock</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            <p className="text-xs font-black text-slate-900 group-hover:text-blue-600 transition-colors">₹{(stock.selling_price / (stock.tablets_per_strip || 1)).toFixed(2)}</p>
+                                                                            <p className="text-[8px] font-bold text-slate-400">per unit</p>
+                                                                        </div>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {/* Backdrop to close dropdown */}
+                                                        {stockSearch.index === idx && (
+                                                            <div className="fixed inset-0 z-[50] pointer-events-auto" onClick={() => setStockSearch({ index: -1, term: "" })} />
+                                                        )}
                                                     </td>
                                                     <td className="py-4 text-center">
                                                         <input

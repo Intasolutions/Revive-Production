@@ -11,6 +11,7 @@ import ManagePage from './pages/Manage';
 import UsersPage from './pages/Users';
 import Laboratory from './pages/Laboratory';
 import Casualty from './pages/Casualty';
+import Billing from './pages/Billing';
 import { SearchProvider } from './context/SearchContext';
 import { ToastProvider } from './context/ToastContext';
 import { DialogProvider } from './context/DialogContext';
@@ -107,8 +108,11 @@ function App() {
                   {/* Dashboard - ADMIN only */}
                   <Route path="/" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><Dashboard /></RoleProtectedRoute>} />
 
-                  {/* Reception - ADMIN, RECEPTION */}
-                  <Route path="/reception" element={<RoleProtectedRoute allowedRoles={['ADMIN', 'RECEPTION']}><Reception /></RoleProtectedRoute>} />
+                  {/* Reception - ADMIN, RECEPTION, PHARMACY */}
+                  <Route path="/reception" element={<RoleProtectedRoute allowedRoles={['ADMIN', 'RECEPTION', 'PHARMACY']}><Reception /></RoleProtectedRoute>} />
+
+                  {/* Billing - Standalone/Search Result fallback */}
+                  <Route path="/billing" element={<RoleProtectedRoute allowedRoles={['ADMIN', 'RECEPTION', 'PHARMACY']}><Billing /></RoleProtectedRoute>} />
 
                   {/* Laboratory - ADMIN, LAB */}
                   <Route path="/lab" element={<RoleProtectedRoute allowedRoles={['ADMIN', 'LAB']}><Laboratory /></RoleProtectedRoute>} />

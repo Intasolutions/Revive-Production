@@ -12,7 +12,7 @@ from pharmacy.models import PharmacyStock
 
 class IsAdminOrReception(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (request.user.role in ['ADMIN', 'RECEPTION'] or request.user.is_superuser)
+        return request.user.is_authenticated and (request.user.role in ['ADMIN', 'RECEPTION', 'PHARMACY'] or request.user.is_superuser)
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all().order_by('-created_at')
@@ -25,39 +25,50 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         invoice = serializer.save()
+        self._deduct_stock(invoice)
         
-        # Deduct Stock based on request data (preserves stock_deducted flag)
-        items_data = serializer.initial_data.get('items', [])
-        
-        for item in items_data:
-            # Check if item is from Pharmacy dept and NOT already deducted
-            if item.get('dept') == 'PHARMACY' and not item.get('stock_deducted'):
-                name = item.get('description')
-                batch = item.get('batch')
-                try:
-                    qty = int(item.get('qty', 0))
-                except (ValueError, TypeError):
-                    qty = 0
+        # Close the visit and reset role to prevent it from showing in 'Ready for Billing'
+        if invoice.visit:
+            visit = invoice.visit
+            visit.status = 'CLOSED'
+            # visit.assigned_role = 'DOCTOR' # Optional: Reset role or leave as BILLING but status CLOSED hides it
+            visit.save()
+
+    def perform_update(self, serializer):
+        invoice = serializer.save()
+        self._deduct_stock(invoice)
+
+    def _deduct_stock(self, invoice):
+        items = invoice.items.all()
+        for item in items:
+            if item.dept == 'PHARMACY':
+                name = item.description.strip() if item.description else ""
+                batch = item.batch.strip() if item.batch else ""
+                current_qty = int(item.qty)
+                already_deducted = int(item.deducted_qty)
+                delta = current_qty - already_deducted
                 
-                if name and qty > 0:
-                    # Find Stock - prefer batch match, fallback to just name
-                    stock = None
-                    if batch:
-                        stock = PharmacyStock.objects.filter(name=name, batch_no=batch).first()
+                if delta == 0:
+                    continue
                     
-                    if not stock:
-                        stock = PharmacyStock.objects.filter(name=name).first() # Fallback
+                # Find Stock
+                stock = None
+                if batch:
+                    stock = PharmacyStock.objects.filter(name__iexact=name, batch_no__iexact=batch).first()
+                if not stock:
+                    stock = PharmacyStock.objects.filter(name__iexact=name).first()
+                
+                if stock:
+                    # Perform stock adjustment
+                    stock.qty_available -= delta
+                    if stock.qty_available < 0:
+                        stock.qty_available = 0
+                    stock.save()
                     
-                    if stock:
-                        if stock.qty_available >= qty:
-                            # Avoid F() expression because it crashes signal handlers
-                            stock.qty_available -= qty 
-                            stock.save()
-                        else:
-                            # Partial deduct or just set to 0? 
-                            # Let's just deduct available
-                            stock.qty_available = 0
-                            stock.save()
+                    # Update item tracking
+                    item.deducted_qty = current_qty
+                    item.stock_deducted = True
+                    item.save()
 
     @action(detail=False, methods=['get'])
     def stats(self, request):

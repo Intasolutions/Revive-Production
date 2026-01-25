@@ -49,7 +49,9 @@ class VisitSerializer(serializers.ModelSerializer):
         model = Visit
         fields = [
             'id', 'v_id', 'patient', 'patient_name', 'doctor', 'doctor_name', 'consultation_fee', 'assigned_role',
-            'status', 'vitals', 'prescription', 'lab_referral_details', 'pharmacy_items', 'lab_results', 'patient_age', 'patient_gender', 'created_at', 'updated_at'
+            'status', 'vitals', 'prescription', 'lab_referral_details', 'pharmacy_items', 'lab_results', 
+            'casualty_medicines', 'casualty_services', 'casualty_observations',
+            'patient_age', 'patient_gender', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'v_id', 'created_at', 'updated_at']
 
@@ -57,6 +59,9 @@ class VisitSerializer(serializers.ModelSerializer):
     lab_referral_details = serializers.SerializerMethodField()
     pharmacy_items = serializers.SerializerMethodField()
     lab_results = serializers.SerializerMethodField()
+    casualty_medicines = serializers.SerializerMethodField()
+    casualty_services = serializers.SerializerMethodField()
+    casualty_observations = serializers.SerializerMethodField()
     
     def get_doctor_name(self, obj):
         # Get doctor name from visit.doctor FK
@@ -73,7 +78,7 @@ class VisitSerializer(serializers.ModelSerializer):
         # Get doctor's consultation fee
         if obj.doctor and hasattr(obj.doctor, 'consultation_fee'):
             return float(obj.doctor.consultation_fee)
-        return 500.00  # Default fee
+        return 0.00 if not obj.doctor else 500.00  # Default fee only if doctor exists
 
     def get_pharmacy_items(self, obj):
         # Return list of items from all PENDING pharmacy sales
@@ -178,6 +183,18 @@ class VisitSerializer(serializers.ModelSerializer):
             return results
         except:
             return []
+
+    def get_casualty_medicines(self, obj):
+        from casualty.serializers import CasualtyMedicineSerializer
+        return CasualtyMedicineSerializer(obj.casualty_medicines.all(), many=True).data
+
+    def get_casualty_services(self, obj):
+        from casualty.serializers import CasualtyServiceSerializer
+        return CasualtyServiceSerializer(obj.casualty_services.all(), many=True).data
+
+    def get_casualty_observations(self, obj):
+        from casualty.serializers import CasualtyObservationSerializer
+        return CasualtyObservationSerializer(obj.casualty_observations.all(), many=True).data
 
     def validate_doctor(self, doctor):
         # Allow doctor to be null or any user

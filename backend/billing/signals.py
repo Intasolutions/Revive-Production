@@ -10,7 +10,7 @@ def create_or_update_consultation_invoice(sender, instance, created, **kwargs):
     if instance.doctor and hasattr(instance.doctor, 'consultation_fee'):
         amount = instance.doctor.consultation_fee
     
-    if created:
+    if created and instance.doctor:
         # Create new invoice
         invoice = Invoice.objects.create(
             visit=instance,
