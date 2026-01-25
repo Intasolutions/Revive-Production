@@ -94,7 +94,14 @@ class VisitViewSet(viewsets.ModelViewSet):
         # visits = Visit.objects.filter(casualty_logs__isnull=False).distinct().order_by('-created_at')
         
         # Method 2: Reverse query
-        visits = Visit.objects.filter(casualty_logs__isnull=False).order_by('-created_at').distinct()
+        from django.db.models import Q
+        # Efficient query: Visits where id is in the set of log visits OR have casualty items.
+        visits = Visit.objects.filter(
+            Q(casualty_logs__isnull=False) |
+            Q(casualty_medicines__isnull=False) |
+            Q(casualty_services__isnull=False) |
+            Q(casualty_observations__isnull=False)
+        ).order_by('-created_at').distinct()
         
         page = self.paginate_queryset(visits)
         if page is not None:

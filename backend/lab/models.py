@@ -158,6 +158,7 @@ class LabTest(BaseModel):
     name = models.CharField(max_length=255)
     category = models.CharField(max_length=50) # Managed via LabCategory, but kept loose for flexibility
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    gender = models.CharField(max_length=1, choices=[('M', 'Male'), ('F', 'Female'), ('B', 'Both')], default='B')
     normal_range = models.TextField(blank=True, null=True)
 
     def __str__(self):

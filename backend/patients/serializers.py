@@ -9,7 +9,7 @@ class PatientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Patient
-        fields = ['id', 'p_id', 'full_name', 'age', 'gender', 'phone', 'address', 'id_proof', 'total_visits', 'last_consulted_doctor', 'created_at', 'updated_at']
+        fields = ['id', 'p_id', 'registration_number', 'full_name', 'age', 'gender', 'phone', 'address', 'id_proof', 'total_visits', 'last_consulted_doctor', 'created_at', 'updated_at']
         read_only_fields = ['id', 'p_id', 'created_at', 'updated_at']
 
     def get_total_visits(self, obj):

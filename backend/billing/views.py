@@ -96,11 +96,15 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def pending_visits(self, request):
-        # Pending Billing: Closed Visits that have pharmacy sales but no invoice yet
+        from django.db.models import Q
+        # Pending Billing: Visits that have unbilled pharmacy sales OR casualty items
+        # And no invoice yet
         visits = Visit.objects.filter(
-            status='CLOSED', 
-            pharmacy_sales__isnull=False,  # Must have pharmacy sales
             invoices__isnull=True  # No invoice yet
+        ).filter(
+            Q(pharmacy_sales__isnull=False) |
+            Q(casualty_medicines__isnull=False) |
+            Q(casualty_services__isnull=False)
         ).distinct().order_by('-updated_at')
         serializer = VisitSerializer(visits, many=True)
         return Response(serializer.data)

@@ -607,6 +607,62 @@ const Doctor = () => {
                                             )}
                                         </AnimatePresence>
 
+                                        {/* --- Casualty / Emergency Record --- */}
+                                        {(selectedVisit.casualty_medicines?.length > 0 || selectedVisit.casualty_services?.length > 0 || selectedVisit.casualty_observations?.length > 0) && (
+                                            <div className="mb-6">
+                                                <div className="flex items-center gap-3 mb-4">
+                                                    <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                                                        <Activity size={20} />
+                                                    </div>
+                                                    <h3 className="text-lg font-bold text-slate-800">Emergency Care Record</h3>
+                                                </div>
+                                                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm divide-y divide-slate-100">
+
+                                                    {/* Observation Notes */}
+                                                    {selectedVisit.casualty_observations?.map((obs, idx) => (
+                                                        <div key={idx} className="p-4 bg-amber-50/30">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="text-xs font-black text-amber-600 uppercase tracking-wider bg-amber-100 px-2 py-0.5 rounded">Observation</span>
+                                                                <span className="text-xs font-bold text-slate-500">Duration: {obs.planned_duration_minutes} mins</span>
+                                                            </div>
+                                                            <p className="text-sm font-medium text-slate-800">{obs.observation_notes || 'No notes recorded.'}</p>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Medicines Given */}
+                                                    {selectedVisit.casualty_medicines?.length > 0 && (
+                                                        <div className="p-4">
+                                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">Medicines Administered</h4>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {selectedVisit.casualty_medicines.map((med, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+                                                                        <Pill size={12} className="text-slate-400" />
+                                                                        <span className="text-xs font-bold text-slate-700">{med.name}</span>
+                                                                        <span className="text-[10px] font-black text-slate-400 bg-white px-1.5 rounded border border-slate-100">Qty: {med.qty}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Services Performed */}
+                                                    {selectedVisit.casualty_services?.length > 0 && (
+                                                        <div className="p-4">
+                                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">Procedures / Services</h4>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {selectedVisit.casualty_services.map((svc, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-lg">
+                                                                        <Activity size={12} className="text-blue-500" />
+                                                                        <span className="text-xs font-bold text-blue-700">{svc.name}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* --- Lab Reports Section --- */}
                                         {selectedVisit.lab_results && selectedVisit.lab_results.length > 0 && (
                                             <div className="mb-6">

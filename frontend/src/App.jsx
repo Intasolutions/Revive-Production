@@ -108,8 +108,8 @@ function App() {
                   {/* Dashboard - ADMIN only */}
                   <Route path="/" element={<RoleProtectedRoute allowedRoles={['ADMIN']}><Dashboard /></RoleProtectedRoute>} />
 
-                  {/* Reception - ADMIN, RECEPTION, PHARMACY */}
-                  <Route path="/reception" element={<RoleProtectedRoute allowedRoles={['ADMIN', 'RECEPTION', 'PHARMACY']}><Reception /></RoleProtectedRoute>} />
+                  {/* Reception - ADMIN, RECEPTION, PHARMACY, LAB */}
+                  <Route path="/reception" element={<RoleProtectedRoute allowedRoles={['ADMIN', 'RECEPTION', 'PHARMACY', 'LAB']}><Reception /></RoleProtectedRoute>} />
 
                   {/* Billing - Standalone/Search Result fallback */}
                   <Route path="/billing" element={<RoleProtectedRoute allowedRoles={['ADMIN', 'RECEPTION', 'PHARMACY']}><Billing /></RoleProtectedRoute>} />

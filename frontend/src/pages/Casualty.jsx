@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Activity, Search, Clock, Save, X, CheckCircle,
     Thermometer, Heart, Wind, Stethoscope, AlertTriangle, FileText,
-    User, ArrowRight, ChevronRight, ChevronDown, Filter, Plus, Pencil, Trash2
+    User, ArrowRight, ChevronRight, ChevronDown, Filter, Plus, Pencil, Trash2, Pill
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
@@ -10,8 +10,8 @@ import { useToast } from '../context/ToastContext';
 import { socket } from '../socket';
 
 // --- Premium Triage Modal ---
-const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [], serviceDefinitions = [], readOnly = false }) => {
-    const [activeTab, setActiveTab] = useState('TRIAGE');
+const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [], serviceDefinitions = [], readOnly = false, initialTab = 'TRIAGE' }) => {
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [formData, setFormData] = useState({
         vitals: { bp: '', temp: '', pulse: '', spo2: '', weight: '' },
         treatment_notes: '',
@@ -43,13 +43,16 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
             const [meds, svcs, obs] = await Promise.all([
                 api.get(`/casualty/medicines/?visit=${visitId}`),
                 api.get(`/casualty/services/?visit=${visitId}`),
-                api.get(`/casualty/observations/?visit=${visitId}&is_active=true`)
+                api.get(`/casualty/observations/?visit=${visitId}`)
             ]);
+            const allObs = obs.data.results || obs.data || [];
+            const activeOb = allObs.find(o => o.is_active) || allObs[0] || { planned_duration_minutes: 60, observation_notes: '', is_active: false };
+
             setFormData(prev => ({
                 ...prev,
                 medicines: meds.data.results || meds.data,
                 services: svcs.data.results || svcs.data,
-                observation: (obs.data.results || obs.data)[0] || { planned_duration_minutes: 60, observation_notes: '', is_active: false }
+                observation: activeOb
             }));
         } catch (e) { console.error("Error fetching casualty data:", e); }
     };
@@ -93,11 +96,12 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
 
     const handleSubmit = async () => {
         if (readOnly) return;
-        const { bp, temp, pulse, spo2 } = formData.vitals;
-        if (!bp || !temp || !pulse || !spo2) {
-            setError('MISSING VITALS: BP, Temp, Pulse, and SpO2 are required.');
-            return;
-        }
+        // Validation removed as per request
+        // const { bp, temp, pulse, spo2 } = formData.vitals;
+        // if (!bp || !temp || !pulse || !spo2) {
+        //     setError('MISSING VITALS: BP, Temp, Pulse, and SpO2 are required.');
+        //     return;
+        // }
 
         setError(null);
         const success = await onSave(visit.id || visit.v_id, formData);
@@ -340,26 +344,24 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
                                 {formData.observation.is_active && <CheckCircle size={24} className="text-amber-500 ml-auto" />}
                             </label>
 
-                            {formData.observation.is_active && (
-                                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="p-8 bg-white border-2 border-slate-100 rounded-[2rem] space-y-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex-1">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration (Minutes)</label>
-                                                {formData.observation.start_time && (
-                                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Started: {new Date(formData.observation.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                )}
-                                            </div>
-                                            <input disabled={readOnly} type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-slate-900 text-xl outline-none focus:border-amber-500 transition-all disabled:text-slate-500" value={formData.observation.planned_duration_minutes} onChange={e => setFormData({ ...formData, observation: { ...formData.observation, planned_duration_minutes: e.target.value } })} />
+                            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className={`p-8 border-2 rounded-[2rem] space-y-6 transition-colors ${formData.observation.is_active ? 'bg-white border-slate-100' : 'bg-slate-50 border-slate-100 opacity-70 hover:opacity-100'}`}>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration (Minutes)</label>
+                                            {formData.observation.start_time && (
+                                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Started: {new Date(formData.observation.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            )}
                                         </div>
-                                        <div className="p-4 bg-amber-50 rounded-2xl text-amber-600 font-black text-sm">≈ {(formData.observation.planned_duration_minutes / 60).toFixed(1)} Hours</div>
+                                        <input disabled={readOnly || !formData.observation.is_active} type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-slate-900 text-xl outline-none focus:border-amber-500 transition-all disabled:text-slate-500 disabled:bg-slate-100/50" value={formData.observation.planned_duration_minutes} onChange={e => setFormData({ ...formData, observation: { ...formData.observation, planned_duration_minutes: e.target.value } })} />
                                     </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Observation Notes</label>
-                                        <textarea disabled={readOnly} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-xs disabled:bg-slate-50" rows="3" placeholder="Condition monitoring notes..." value={formData.observation.observation_notes} onChange={e => setFormData({ ...formData, observation: { ...formData.observation, observation_notes: e.target.value } })} />
-                                    </div>
-                                </motion.div>
-                            )}
+                                    <div className="p-4 bg-amber-50 rounded-2xl text-amber-600 font-black text-sm">≈ {(formData.observation.planned_duration_minutes / 60).toFixed(1)} Hours</div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Observation Notes</label>
+                                    <textarea disabled={readOnly} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-xs disabled:bg-slate-50" rows="3" placeholder="Condition monitoring notes..." value={formData.observation.observation_notes} onChange={e => setFormData({ ...formData, observation: { ...formData.observation, observation_notes: e.target.value } })} />
+                                </div>
+                            </motion.div>
                         </div>
                     )}
                 </div>
@@ -536,6 +538,7 @@ const CasualtyPage = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [selectedVisit, setSelectedVisit] = useState(null);
+    const [initialModalTab, setInitialModalTab] = useState('TRIAGE');
     const [showManageServices, setShowManageServices] = useState(false);
 
     // History View State
@@ -583,6 +586,25 @@ const CasualtyPage = () => {
         };
     }, []);
 
+    const fetchHistory = async () => {
+        setHistoryLoading(true);
+        try {
+            const { data } = await api.get('/reception/visits/casualty_history/');
+            setHistory(data.results || data);
+        } catch (error) {
+            console.error("Failed to fetch history:", error);
+            showToast('error', 'Failed to load patient history');
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (viewMode === 'HISTORY') {
+            fetchHistory();
+        }
+    }, [viewMode]);
+
     const fetchMetadata = async () => {
         try {
             const [stock, svcs] = await Promise.all([
@@ -597,10 +619,23 @@ const CasualtyPage = () => {
     const fetchQueue = async (showLoading = true) => {
         if (showLoading) setLoading(true);
         try {
-            const { data } = await api.get('/reception/visits/?assigned_role=CASUALTY&status__in=IN_PROGRESS,OPEN');
-            setQueue(data.results || data);
+            // Fetch both statuses in parallel to avoid potential 400 bad request with comma-separated filter
+            const [openRes, progressRes] = await Promise.all([
+                api.get('/reception/visits/?assigned_role=CASUALTY&status=OPEN'),
+                api.get('/reception/visits/?assigned_role=CASUALTY&status=IN_PROGRESS')
+            ]);
+
+            const openData = openRes.data.results || openRes.data || [];
+            const progressData = progressRes.data.results || progressRes.data || [];
+
+            // Combine and deduplicate just in case
+            const combined = [...progressData, ...openData];
+            const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+
+            setQueue(unique);
         } catch (error) {
             console.error(error);
+            showToast('error', 'Failed to load casualty queue');
         } finally {
             if (showLoading) setLoading(false);
         }
@@ -723,17 +758,32 @@ const CasualtyPage = () => {
             }
 
             // 4. Observation Management
-            if (data.observation.is_active) {
-                if (data.observation.id) {
-                    await api.patch(`/casualty/observations/${data.observation.id}/`, data.observation);
+            // 4. Observation Management
+            if (data.observation.id) {
+                // If we are finishing observation (is_active=false), let's be safe and close ALL active ones for this visit
+                // This handles edge cases where multiple active observations were created due to race conditions/bugs
+                if (!data.observation.is_active) {
+                    const activeObsRes = await api.get(`/casualty/observations/?visit=${visitId}&is_active=true`);
+                    const activeObsList = activeObsRes.data.results || activeObsRes.data || [];
+
+                    for (const obs of activeObsList) {
+                        await api.patch(`/casualty/observations/${obs.id}/`, {
+                            is_active: false,
+                            end_time: new Date().toISOString()
+                        });
+                    }
                 } else {
-                    await api.post('/casualty/observations/', {
-                        visit: visitId,
-                        planned_duration_minutes: data.observation.planned_duration_minutes,
-                        observation_notes: data.observation.observation_notes,
-                        is_active: true
-                    });
+                    // Normal update
+                    await api.patch(`/casualty/observations/${data.observation.id}/`, data.observation);
                 }
+            } else if (data.observation.is_active) {
+                // Only create new if it is being set to active
+                await api.post('/casualty/observations/', {
+                    visit: visitId,
+                    planned_duration_minutes: data.observation.planned_duration_minutes,
+                    observation_notes: data.observation.observation_notes,
+                    is_active: true
+                });
             }
 
             let updatePayload = { vitals: data.vitals };
@@ -933,16 +983,53 @@ const CasualtyPage = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-3">
-                                                    {viewMode === 'QUEUE' && visit.casualty_observations?.some(o => o.is_active) && (
-                                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-lg text-amber-600 animate-pulse">
-                                                            <Clock size={12} />
-                                                            <span className="text-[10px] font-black uppercase tracking-widest">In Observation</span>
-                                                        </div>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {viewMode === 'OBSERVATION' && activeObs ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => { setInitialModalTab('MEDICINES'); setSelectedVisit(visit); }}
+                                                                className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
+                                                                title="Add Medicine"
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <Pill size={14} /> <span className="text-[10px] font-black uppercase hidden lg:inline">Meds</span>
+                                                                </div>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setInitialModalTab('SERVICES'); setSelectedVisit(visit); }}
+                                                                className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-100"
+                                                                title="Add Service"
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <Plus size={14} /> <span className="text-[10px] font-black uppercase hidden lg:inline">Svc</span>
+                                                                </div>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setInitialModalTab('OBSERVATION'); setSelectedVisit(visit); }}
+                                                                className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors border border-amber-100"
+                                                                title="Manage Observation"
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <Clock size={14} /> <span className="text-[10px] font-black uppercase hidden lg:inline">Update</span>
+                                                                </div>
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            {viewMode === 'QUEUE' && visit.casualty_observations?.some(o => o.is_active) && (
+                                                                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-lg text-amber-600 animate-pulse">
+                                                                    <Clock size={12} />
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest hidden xl:inline">Observing</span>
+                                                                </div>
+                                                            )}
+                                                            <button
+                                                                onClick={() => { setInitialModalTab('TRIAGE'); setSelectedVisit(visit); }}
+                                                                className={`px-4 py-2 text-xs font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center gap-2 uppercase tracking-wide ${viewMode === 'HISTORY' ? 'bg-white border-2 border-slate-100 text-slate-600 hover:bg-slate-50' : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-900/10'}`}
+                                                            >
+                                                                {viewMode === 'HISTORY' ? <FileText size={14} /> : <Stethoscope size={14} />} {viewMode === 'HISTORY' ? 'View Details' : 'Assess'}
+                                                            </button>
+                                                        </>
                                                     )}
-                                                    <button onClick={() => setSelectedVisit(visit)} className={`px-4 py-2 text-xs font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center gap-2 uppercase tracking-wide ${viewMode === 'HISTORY' ? 'bg-white border-2 border-slate-100 text-slate-600 hover:bg-slate-50' : 'bg-slate-900 text-white hover:bg-blue-600 shadow-slate-900/10'}`}>
-                                                        {viewMode === 'HISTORY' ? <FileText size={14} /> : <Stethoscope size={14} />} {viewMode === 'HISTORY' ? 'View Details' : 'Assess / Triage'}
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -964,6 +1051,7 @@ const CasualtyPage = () => {
                         pharmacyStock={pharmacyStock}
                         serviceDefinitions={serviceDefinitions}
                         readOnly={viewMode === 'HISTORY'}
+                        initialTab={initialModalTab}
                     />
                 )}
                 {showManageServices && (

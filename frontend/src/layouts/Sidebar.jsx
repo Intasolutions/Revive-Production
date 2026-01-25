@@ -15,7 +15,7 @@ const Sidebar = () => {
 
     const menuItems = [
         { name: 'Dashboard', icon: LayoutDashboard, path: '/', roles: ['ADMIN'] },
-        { name: 'Reception', icon: Users, path: '/reception', roles: ['ADMIN', 'RECEPTION', 'PHARMACY'] },
+        { name: 'Reception', icon: Users, path: '/reception', roles: ['ADMIN', 'RECEPTION', 'PHARMACY', 'LAB'] },
         { name: 'Casualty', icon: Activity, path: '/casualty', roles: ['ADMIN', 'CASUALTY'] },
         { name: 'Doctor', icon: Stethoscope, path: '/doctor', roles: ['ADMIN', 'DOCTOR'] },
         { name: 'Pharmacy', icon: Pill, path: '/pharmacy', roles: ['ADMIN', 'PHARMACY'] },

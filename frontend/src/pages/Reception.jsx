@@ -7,6 +7,7 @@ import {
     MapPin, ChevronRight, Search, CheckCircle2, AlertCircle, FileText, IndianRupee
 } from 'lucide-react';
 import { useSearch } from '../context/SearchContext';
+import { useAuth } from '../context/AuthContext';
 import Pagination from '../components/Pagination';
 import api from '../api/axios';
 import Billing from './Billing'; // Integrated Billing Module
@@ -54,6 +55,7 @@ const Toast = ({ message, type, onClose }) => (
 
 const Reception = () => {
     // --- State Management ---
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [patientsData, setPatientsData] = useState({ results: [], count: 0 });
     const { globalSearch } = useSearch();
@@ -77,7 +79,7 @@ const Reception = () => {
     const [notification, setNotification] = useState(null); // { type: 'success'|'error', message: '' }
 
     // Registration Form
-    const [form, setForm] = useState({ full_name: '', age: '', gender: 'M', phone: '', address: '' });
+    const [form, setForm] = useState({ registration_number: '', full_name: '', age: '', gender: 'M', phone: '', address: '' });
     const [errors, setErrors] = useState({});
 
     // Visit Form
@@ -213,6 +215,7 @@ const Reception = () => {
 
     const validateForm = () => {
         let newErrors = {};
+        if (!form.registration_number.trim()) newErrors.registration_number = "Registration Number is mandatory.";
         if (!form.full_name.trim()) newErrors.full_name = "Full Name is mandatory.";
         if (!form.age || isNaN(form.age) || Number(form.age) <= 0) newErrors.age = "Please enter a valid age.";
         if (!form.phone.trim()) newErrors.phone = "Phone Number is mandatory.";
@@ -316,16 +319,18 @@ const Reception = () => {
                         <UserPlus size={18} />
                         FRONT DESK
                     </button>
-                    <button
-                        onClick={() => setActiveTab('billing')}
-                        className={`h-full flex items-center gap-2 border-b-2 text-sm font-bold tracking-wide transition-all ${activeTab === 'billing'
-                            ? 'border-indigo-600 text-indigo-700'
-                            : 'border-transparent text-slate-500 hover:text-slate-800'
-                            }`}
-                    >
-                        <Activity size={18} />
-                        BILLING & INVOICES
-                    </button>
+                    {user?.role !== 'LAB' && (
+                        <button
+                            onClick={() => setActiveTab('billing')}
+                            className={`h-full flex items-center gap-2 border-b-2 text-sm font-bold tracking-wide transition-all ${activeTab === 'billing'
+                                ? 'border-indigo-600 text-indigo-700'
+                                : 'border-transparent text-slate-500 hover:text-slate-800'
+                                }`}
+                        >
+                            <Activity size={18} />
+                            BILLING & INVOICES
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -479,7 +484,7 @@ const Reception = () => {
                                                                     </div>
                                                                     <div>
                                                                         <p className="font-bold text-slate-900 text-[15px]">{p.full_name}</p>
-                                                                        <p className="text-xs font-bold text-slate-400 font-mono tracking-wide">ID: {p.p_id.slice(0, 8)}</p>
+                                                                        <p className="text-xs font-bold text-slate-400 font-mono tracking-wide">ID: {p.registration_number || p.p_id.slice(0, 8)}</p>
                                                                     </div>
                                                                 </div>
                                                             </td>
@@ -558,6 +563,20 @@ const Reception = () => {
                                         </div>
                                         <div className="p-10 space-y-6">
                                             <div className="space-y-4">
+                                                <div>
+                                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Registration Number</label>
+                                                    <div className={`flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 transition-all ${errors.registration_number ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10'}`}>
+                                                        <FileText className={errors.registration_number ? "text-rose-400" : "text-slate-400"} size={20} />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="e.g. OP-2024-001"
+                                                            className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none"
+                                                            value={form.registration_number}
+                                                            onChange={(e) => setForm({ ...form, registration_number: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    {errors.registration_number && <p className="text-xs font-bold text-rose-500 mt-2 ml-2 flex items-center gap-1"><AlertCircle size={12} /> {errors.registration_number}</p>}
+                                                </div>
                                                 <div>
                                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Full Name</label>
                                                     <div className={`flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 transition-all ${errors.full_name ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10'}`}>

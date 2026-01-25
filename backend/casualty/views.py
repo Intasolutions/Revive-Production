@@ -53,6 +53,18 @@ class CasualtyMedicineViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return CasualtyMedicine.objects.all().order_by('-created_at')
 
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import ValidationError
+        stock = serializer.validated_data['med_stock']
+        qty = serializer.validated_data['qty']
+
+        if stock.qty_available < qty:
+            raise ValidationError({"med_stock": f"Insufficient stock. Available: {stock.qty_available}"})
+
+        stock.qty_available -= qty
+        stock.save()
+        serializer.save()
+
 class CasualtyObservationViewSet(viewsets.ModelViewSet):
     serializer_class = CasualtyObservationSerializer
     permission_classes = [IsCasualtyOrAdmin]

@@ -66,7 +66,7 @@ const Laboratory = () => {
     // Test Catalog Form
     const [showTestModal, setShowTestModal] = useState(false);
     const [editingTestId, setEditingTestId] = useState(null);
-    const [testCatalogForm, setTestCatalogForm] = useState({ name: '', category: 'HAEMATOLOGY', price: '', normal_range: '', parameters: [], required_items: [] });
+    const [testCatalogForm, setTestCatalogForm] = useState({ name: '', category: 'HAEMATOLOGY', price: '', gender: 'B', normal_range: '', parameters: [], required_items: [] });
 
     // Modals
     const [showModal, setShowModal] = useState(false); // Add Test Modal
@@ -317,7 +317,7 @@ const Laboratory = () => {
             }
             setShowTestModal(false);
             setEditingTestId(null);
-            setTestCatalogForm({ name: '', category: 'HAEMATOLOGY', price: '', normal_range: '', parameters: [], required_items: [] });
+            setTestCatalogForm({ name: '', category: 'HAEMATOLOGY', price: '', gender: 'B', normal_range: '', parameters: [], required_items: [] });
             fetchLabTests();
         } catch (err) { showToast('error', 'Failed to save test'); }
     };
@@ -327,6 +327,7 @@ const Laboratory = () => {
             name: test.name,
             category: test.category,
             price: test.price,
+            gender: test.gender || 'B',
             normal_range: test.normal_range || '',
             parameters: test.parameters || [],
             required_items: test.required_items || []
@@ -1017,6 +1018,23 @@ const Laboratory = () => {
                                                 {categories.length > 0 ? categories.map(c => (
                                                     <option key={c.id} value={c.name}>{c.name}</option>
                                                 )) : <option value="HAEMATOLOGY">HAEMATOLOGY</option>}
+                                            </select>
+                                            <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={16} />
+                                        </div>
+                                    </div>
+
+                                    {/* Gender Field */}
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Gender</label>
+                                        <div className="relative">
+                                            <select
+                                                value={testCatalogForm.gender || 'B'}
+                                                onChange={e => setTestCatalogForm({ ...testCatalogForm, gender: e.target.value })}
+                                                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-slate-800 focus:border-blue-500 outline-none transition-all appearance-none"
+                                            >
+                                                <option value="M">Male Only</option>
+                                                <option value="F">Female Only</option>
+                                                <option value="B">Both (Male & Female)</option>
                                             </select>
                                             <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={16} />
                                         </div>

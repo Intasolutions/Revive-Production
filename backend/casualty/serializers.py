@@ -8,6 +8,10 @@ class CasualtyLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = CasualtyLog
         fields = '__all__'
+        extra_kwargs = {
+            'treatment_notes': {'required': False, 'allow_blank': True},
+            'transfer_path': {'required': False, 'allow_blank': True},
+        }
 
 class CasualtyServiceDefinitionSerializer(serializers.ModelSerializer):
     class Meta:
