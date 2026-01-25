@@ -396,6 +396,18 @@ class PharmacySaleViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['sale_date', 'total_amount']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get('search')
+        
+        # Support searching by Invoice ID (UUID string match) or Patient Name
+        if search:
+            qs = qs.filter(
+                models.Q(id__icontains=search) | 
+                models.Q(patient__full_name__icontains=search) |
+                models.Q(patient__phone__icontains=search)
+            )
+        return qs
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()

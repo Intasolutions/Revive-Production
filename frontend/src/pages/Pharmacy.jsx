@@ -846,7 +846,7 @@ const Pharmacy = () => {
                                     <tbody className="divide-y divide-slate-50 font-medium text-sm text-slate-600">
                                         {recentImports.map(imp => (
                                             <tr key={imp.id} className="hover:bg-slate-50 transition-colors">
-                                                <td className="px-6 py-4 font-bold text-slate-900">#{imp.invoice_no}</td>
+                                                <td className="px-6 py-4 font-bold text-slate-900">#{imp.supplier_invoice_no}</td>
                                                 <td className="px-6 py-4">{suppliers.find(s => s.id === imp.supplier)?.supplier_name || imp.supplier_name || 'N/A'}</td>
                                                 <td className="px-6 py-4 font-mono text-xs text-slate-500">{new Date(imp.created_at).toLocaleDateString()}</td>
                                                 <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-bold">{imp.items_detail ? imp.items_detail.length : 0}</span></td>

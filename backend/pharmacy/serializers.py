@@ -59,8 +59,12 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
             rate = float(item.get('purchase_rate', 0))
             qty = int(item.get('qty', 0))
             gst_percent = float(item.get('gst_percent', 0))
+            discount_percent = float(item.get('discount_percent', 0))
             
-            taxable = rate * qty
+            gross = rate * qty
+            discount = gross * (discount_percent / 100.0)
+            taxable = gross - discount
+            
             gst_amount = taxable * (gst_percent / 100.0)
             total_amount += (taxable + gst_amount)
         
@@ -333,12 +337,14 @@ class PharmacyReturnSerializer(serializers.ModelSerializer):
                 )
 
             # Calculation using ORIGINAL sale price and gst
+            # !CRITICAL: DO NOT CHANGE. Must refund what was paid (Original Unit Price).
             refund_amt = sale_item.unit_price * return_qty
             gst_rev = refund_amt * (sale_item.gst_percent / 100)
             
             total_refund += refund_amt
 
             # 2. Update Inventory (Restock to SAME Batch)
+            # !CRITICAL: DO NOT CHANGE. Must restore to the EXACT batch sold.
             med_stock = sale_item.med_stock
             med_stock.qty_available += return_qty
             med_stock.save()

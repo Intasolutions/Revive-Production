@@ -35,7 +35,7 @@ class CasualtyService(BaseModel):
 
 class CasualtyMedicine(BaseModel):
     visit = models.ForeignKey(Visit, on_delete=models.CASCADE, related_name='casualty_medicines')
-    med_stock = models.ForeignKey(PharmacyStock, on_delete=models.PROTECT)
+    med_stock = models.ForeignKey(PharmacyStock, on_delete=models.SET_NULL, null=True, blank=True)
     qty = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
