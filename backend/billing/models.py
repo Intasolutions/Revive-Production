@@ -9,6 +9,8 @@ class Invoice(BaseModel):
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     refund_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payment_status = models.CharField(max_length=20, default='PENDING', choices=PAYMENT_STATUS)
+    payment_mode = models.CharField(max_length=20, null=True, blank=True, choices=(('CASH', 'Cash'), ('UPI', 'Google Pay / UPI'), ('CARD', 'Card')))
+    remarks = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return f"Invoice {self.id} - {self.total_amount}"
@@ -35,3 +37,13 @@ class InvoiceItem(BaseModel):
 
     def __str__(self):
         return f"{self.dept}: {self.description}"
+
+class PaymentTransaction(BaseModel):
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    mode = models.CharField(max_length=20, choices=(('CASH', 'Cash'), ('UPI', 'Google Pay / UPI'), ('CARD', 'Card')))
+    remarks = models.TextField(null=True, blank=True)
+    transaction_id = models.CharField(max_length=100, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.mode}: {self.amount} for Inv #{self.invoice.id}"

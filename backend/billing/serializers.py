@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import Invoice, InvoiceItem
+from .models import Invoice, InvoiceItem, PaymentTransaction
+
+class PaymentTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentTransaction
+        fields = '__all__'
+        read_only_fields = ['invoice']
 
 class InvoiceItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -9,13 +15,24 @@ class InvoiceItemSerializer(serializers.ModelSerializer):
 
 class InvoiceSerializer(serializers.ModelSerializer):
     items = InvoiceItemSerializer(many=True, required=False)
+    payments = PaymentTransactionSerializer(many=True, read_only=True)
+    amount_paid = serializers.SerializerMethodField()
+    balance_due = serializers.SerializerMethodField()
+    
     patient_display = serializers.SerializerMethodField()
     patient_id = serializers.SerializerMethodField()
     registration_number = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
-        fields = ['id', 'visit', 'patient_name', 'total_amount', 'refund_amount', 'payment_status', 'items', 'patient_display', 'patient_id', 'registration_number', 'created_at']
+        fields = ['id', 'visit', 'patient_name', 'total_amount', 'refund_amount', 'payment_status', 'payment_mode', 'remarks', 'items', 'payments', 'amount_paid', 'balance_due', 'patient_display', 'patient_id', 'registration_number', 'created_at']
+
+    def get_amount_paid(self, obj):
+        return sum(p.amount for p in obj.payments.all())
+
+    def get_balance_due(self, obj):
+        paid = sum(p.amount for p in obj.payments.all())
+        return max(0, obj.total_amount - paid)
 
     def get_patient_display(self, obj):
         if obj.visit and obj.visit.patient:

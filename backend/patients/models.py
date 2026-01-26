@@ -15,6 +15,7 @@ class Patient(BaseModel):
     full_name = models.CharField(max_length=255)
     registration_number = models.CharField(max_length=50, null=True, blank=True, default='TEMP', help_text="Manual Registration Number")
     age = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    age_months = models.PositiveIntegerField(validators=[MinValueValidator(0)], default=0, help_text="Months (0-11)")
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
     phone = models.CharField(max_length=15)
     address = models.TextField()

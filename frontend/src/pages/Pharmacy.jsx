@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Pill, Plus, Search, ShoppingCart, AlertTriangle,
     Activity, User, Trash2, Printer, X, CheckCircle2,
-    Clock, UploadCloud, FileText, Send, Eye, ChevronRight, PackagePlus, FileSpreadsheet, Pencil, Check
+    Clock, UploadCloud, FileText, Send, Eye, ChevronRight, PackagePlus, FileSpreadsheet, Pencil, Check, Save, Edit3
 } from 'lucide-react';
 import { Button, Input } from '../components/UI';
 import Pagination from '../components/Pagination';
@@ -362,7 +362,7 @@ const Pharmacy = () => {
         setManualInvoice(prev => ({ ...prev, items: newItems }));
     };
     const removeManualItem = (idx) => { setManualInvoice(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); };
-    const submitManualPurchase = async () => {
+    const submitManualPurchase = async (status = 'COMPLETED') => {
         if (!manualInvoice.supplier || !manualInvoice.supplier_invoice_no || manualInvoice.items.length === 0) {
             return showToast('error', 'Please fill all required fields (Supplier, Invoice No, Items).');
         }
@@ -386,6 +386,7 @@ const Pharmacy = () => {
             // Convert Total Values to Unit Values for Backend
             const payload = {
                 ...manualInvoice,
+                status: status, // Send status
                 items: manualInvoice.items.map(item => {
                     const qty = parseInt(item.qty) || 1;
                     const free = parseInt(item.free_qty) || 0;
@@ -409,8 +410,17 @@ const Pharmacy = () => {
             };
 
             setLoading(true);
-            await api.post('pharmacy/purchases/', payload);
-            showToast('success', 'Stock updated!');
+
+            // Check if updating existing (Draft Resume) or creating new
+            if (manualInvoice.id) {
+                await api.put(`pharmacy/purchases/${manualInvoice.id}/`, payload);
+            } else {
+                await api.post('pharmacy/purchases/', payload);
+            }
+
+            if (status === 'DRAFT') showToast('success', 'Draft Saved Successfully!');
+            else showToast('success', 'Stock updated!');
+
             setShowManualPurchaseModal(false);
             setManualInvoice({ supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [], gst_percent: 0 });
             fetchRecentImports();
@@ -450,6 +460,7 @@ const Pharmacy = () => {
     }, [gstRate]);
     const handleCheckout = async () => {
         if (cart.length === 0) return showToast('error', "Cart Empty");
+        if (!selectedPatient) return showToast('error', "Please select a patient to proceed.");
         let visitId = selectedPatient?.v_id || null;
         if (!visitId && selectedPatient) { const matchInQueue = pendingVisits.find(v => v.patient === selectedPatient.id || (v.patient?.id === selectedPatient.id) || v.patient_name === selectedPatient.full_name); if (matchInQueue) visitId = matchInQueue.id || matchInQueue.v_id; }
         const payload = { visit: visitId, patient: selectedPatient?.p_id || selectedPatient?.id || null, items: cart.map(item => ({ med_stock: item.med_id || item.id, qty: item.qty, unit_price: parseFloat(item.selling_price.toFixed(2)), gst_percent: item.gst_applied || 0 })), payment_status: 'PENDING' };
@@ -788,7 +799,7 @@ const Pharmacy = () => {
                         </div>
                         {/* POS Right Side */}
                         <div className="w-[35%] bg-white flex flex-col shadow-[-10px_0_40px_-15px_rgba(0,0,0,0.05)] z-20">
-                            <div className="p-6 border-b border-slate-100 bg-slate-50 shrink-0"><div className="flex justify-between items-center mb-4"><h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><ShoppingCart size={16} className="text-blue-600" /> Current Bill</h2><span className="text-xs font-bold text-slate-400">{new Date().toLocaleDateString()}</span></div>{selectedPatient ? (<div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between"><div><p className="text-[10px] text-slate-400 font-bold uppercase">Billed To</p><p className="text-sm font-bold text-slate-900">{selectedPatient.full_name}</p></div><button onClick={() => setSelectedPatient(null)} className="text-slate-400 hover:text-red-500"><X size={16} /></button></div>) : <div className="p-3 bg-yellow-50 border border-yellow-100 rounded-xl text-xs font-bold text-yellow-700 text-center">Walk-In Customer (No Name)</div>}</div>
+                            <div className="p-6 border-b border-slate-100 bg-slate-50 shrink-0"><div className="flex justify-between items-center mb-4"><h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><ShoppingCart size={16} className="text-blue-600" /> Current Bill</h2><span className="text-xs font-bold text-slate-400">{new Date().toLocaleDateString()}</span></div>{selectedPatient ? (<div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between"><div><p className="text-[10px] text-slate-400 font-bold uppercase">Billed To</p><p className="text-sm font-bold text-slate-900">{selectedPatient.full_name}</p></div><button onClick={() => setSelectedPatient(null)} className="text-slate-400 hover:text-red-500"><X size={16} /></button></div>) : <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs font-bold text-rose-700 text-center animate-pulse">Please Select Patient</div>}</div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
                                 {cart.length === 0 ? (<div className="flex flex-col items-center justify-center h-full opacity-40"><ShoppingCart size={40} className="mb-2" /><p className="text-xs font-bold uppercase">Empty Cart</p></div>) : cart.map((item, idx) => (
                                     <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
@@ -879,7 +890,11 @@ const Pharmacy = () => {
                                                 <td className="px-6 py-4 font-bold text-slate-900">#{imp.supplier_invoice_no}</td>
                                                 <td className="px-6 py-4">{suppliers.find(s => s.id === imp.supplier)?.supplier_name || imp.supplier_name || 'N/A'}</td>
                                                 <td className="px-6 py-4 font-mono text-xs text-slate-500">{new Date(imp.created_at).toLocaleDateString()}</td>
-                                                <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-bold">{imp.items_detail ? imp.items_detail.length : 0}</span></td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold ${imp.status === 'DRAFT' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-100 text-slate-600'}`}>
+                                                        {imp.status === 'DRAFT' ? 'DRAFT' : imp.items_detail ? imp.items_detail.length : 0}
+                                                    </span>
+                                                </td>
                                                 <td className="px-6 py-4"><ActionTooltip text="View Details"><button onClick={() => setSelectedImport(imp)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Eye size={18} /></button></ActionTooltip></td>
                                             </tr>
                                         ))}
@@ -1058,8 +1073,48 @@ const Pharmacy = () => {
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Value</p><p className="text-2xl font-black text-slate-900">₹{Math.round(selectedImport.total_amount)}</p></div>
                                     <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Items Count</p><p className="text-2xl font-black text-emerald-600">{selectedImport.items_detail?.length || 0}</p></div>
-                                    <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p><div className="flex items-center gap-2 mt-1"><CheckCircle2 size={20} className="text-blue-500" /><span className="text-lg font-bold text-slate-700">Verified</span></div></div>
+                                    <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            {selectedImport.status === 'DRAFT' ? (
+                                                <><Clock size={20} className="text-amber-500" /><span className="text-lg font-bold text-slate-700">Draft</span></>
+                                            ) : (
+                                                <><CheckCircle2 size={20} className="text-blue-500" /><span className="text-lg font-bold text-slate-700">Verified</span></>
+                                            )}
+                                        </div></div>
                                 </div>
+                                {selectedImport.status === 'DRAFT' && (
+                                    <div className="mt-6 flex justify-end">
+                                        <button
+                                            onClick={() => {
+                                                // Resume Draft
+                                                setManualInvoice({
+                                                    id: selectedImport.id,
+                                                    supplier: selectedImport.supplier,
+                                                    supplier_invoice_no: selectedImport.supplier_invoice_no,
+                                                    invoice_date: selectedImport.invoice_date,
+                                                    purchase_type: selectedImport.purchase_type,
+                                                    cash_discount: parseFloat(selectedImport.cash_discount) || 0,
+                                                    courier_charge: parseFloat(selectedImport.courier_charge) || 0,
+                                                    // Flatten items back to manual entry format
+                                                    items: selectedImport.items_detail.map(d => ({
+                                                        ...d,
+                                                        // Ensure numeric types match manual entry expectations
+                                                        qty: d.qty, // Already strips in DB? Wait, let's check PurchaseItemSerializer. 
+                                                        // No, DB has 'qty' which is Strips. Perfect.
+                                                        // But let's verify if 'items_detail' from serializer is fully populated.
+                                                        // Yes, PurchaseInvoiceSerializer has items_detail = PurchaseItemSerializer(many=True)
+                                                        selling_price_per_tab: (parseFloat(d.selling_price) / (d.tablets_per_strip || 1)).toFixed(2)
+                                                    }))
+                                                });
+                                                setSelectedImport(null);
+                                                setShowManualPurchaseModal(true);
+                                            }}
+                                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 uppercase tracking-widest text-xs flex items-center gap-2"
+                                        >
+                                            <Edit3 size={16} /> Resume & Edit Draft
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex-1 overflow-auto p-0">
                                 <table className="w-full text-left border-collapse">
@@ -1483,7 +1538,15 @@ const Pharmacy = () => {
                                         Cancel
                                     </button>
                                     <button
-                                        onClick={submitManualPurchase}
+                                        onClick={() => submitManualPurchase('DRAFT')}
+                                        disabled={loading}
+                                        className="px-6 h-14 border-2 border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-700 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2"
+                                    >
+                                        <Save size={18} />
+                                        Save Draft
+                                    </button>
+                                    <button
+                                        onClick={() => submitManualPurchase('COMPLETED')}
                                         disabled={loading}
                                         className="px-8 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-600/40 active:scale-95 transition-all flex items-center gap-2"
                                     >

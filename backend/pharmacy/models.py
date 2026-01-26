@@ -30,6 +30,12 @@ class PurchaseInvoice(BaseModel):
     purchase_type = models.CharField(max_length=10, choices=PURCHASE_TYPE_CHOICES)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0)])
     
+    STATUS_CHOICES = (
+        ('DRAFT', 'Draft'),
+        ('COMPLETED', 'Completed'),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='COMPLETED')
+    
     # Extra Expenses
     cash_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     courier_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)

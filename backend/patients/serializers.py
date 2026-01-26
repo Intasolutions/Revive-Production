@@ -9,7 +9,7 @@ class PatientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Patient
-        fields = ['id', 'p_id', 'registration_number', 'full_name', 'age', 'gender', 'phone', 'address', 'id_proof', 'total_visits', 'last_consulted_doctor', 'created_at', 'updated_at']
+        fields = ['id', 'p_id', 'registration_number', 'full_name', 'age', 'age_months', 'gender', 'phone', 'address', 'id_proof', 'total_visits', 'last_consulted_doctor', 'created_at', 'updated_at']
         read_only_fields = ['id', 'p_id', 'created_at', 'updated_at']
 
     def get_total_visits(self, obj):
@@ -43,6 +43,7 @@ class VisitSerializer(serializers.ModelSerializer):
     doctor_name = serializers.SerializerMethodField()
     consultation_fee = serializers.SerializerMethodField()
     patient_age = serializers.IntegerField(source='patient.age', read_only=True)
+    patient_age_months = serializers.IntegerField(source='patient.age_months', read_only=True)
     patient_gender = serializers.CharField(source='patient.gender', read_only=True)
     patient_registration_number = serializers.CharField(source='patient.registration_number', read_only=True)
 
@@ -52,7 +53,7 @@ class VisitSerializer(serializers.ModelSerializer):
             'id', 'v_id', 'patient', 'patient_name', 'doctor', 'doctor_name', 'consultation_fee', 'assigned_role',
             'status', 'vitals', 'prescription', 'diagnosis', 'lab_referral_details', 'pharmacy_items', 'lab_results', 'lab_charges_data',
             'casualty_medicines', 'casualty_services', 'casualty_observations',
-            'patient_age', 'patient_gender', 'patient_registration_number', 'created_at', 'updated_at'
+            'patient_age', 'patient_age_months', 'patient_gender', 'patient_registration_number', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'v_id', 'created_at', 'updated_at']
 

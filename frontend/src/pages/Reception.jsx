@@ -80,7 +80,7 @@ const Reception = () => {
     const [notification, setNotification] = useState(null); // { type: 'success'|'error', message: '' }
 
     // Registration Form
-    const [form, setForm] = useState({ registration_number: '', full_name: '', age: '', gender: 'M', phone: '', address: '' });
+    const [form, setForm] = useState({ registration_number: '', full_name: '', age: '', age_months: '', gender: 'M', phone: '', address: '' });
     const [errors, setErrors] = useState({});
 
     // Visit Form
@@ -218,7 +218,9 @@ const Reception = () => {
         let newErrors = {};
         if (!form.registration_number.trim()) newErrors.registration_number = "Registration Number is mandatory.";
         if (!form.full_name.trim()) newErrors.full_name = "Full Name is mandatory.";
-        if (!form.age || isNaN(form.age) || Number(form.age) <= 0) newErrors.age = "Please enter a valid age.";
+        const ageVal = parseInt(form.age || '0');
+        const monthsVal = parseInt(form.age_months || '0');
+        if (isNaN(ageVal) || ageVal < 0 || (ageVal === 0 && monthsVal <= 0)) newErrors.age = "Please enter a valid age.";
         if (!form.phone.trim()) newErrors.phone = "Phone Number is mandatory.";
         else if (!/^\d{10}$/.test(form.phone)) newErrors.phone = "Phone number must be exactly 10 digits.";
         if (!form.address.trim()) newErrors.address = "Residential address is mandatory.";
@@ -236,14 +238,20 @@ const Reception = () => {
         }
 
         try {
+            const payload = {
+                ...form,
+                age: form.age ? parseInt(form.age) : 0,
+                age_months: form.age_months ? parseInt(form.age_months) : 0
+            };
+
             let response;
             if (editingPatientId) {
                 // Update Mode
-                response = await api.patch(`/reception/patients/${editingPatientId}/`, form);
+                response = await api.patch(`/reception/patients/${editingPatientId}/`, payload);
                 showToast('success', 'Patient details updated successfully!');
             } else {
                 // Create Mode
-                response = await api.post('/reception/patients/register/', form);
+                response = await api.post('/reception/patients/register/', payload);
                 // Backend returns 200 OK if patient exists, 201 CREATED if new
                 if (response.status === 200) {
                     showToast('error', 'The patient is already there with this number');
@@ -519,7 +527,9 @@ const Reception = () => {
                                                                     </div>
                                                                     <div>
                                                                         <p className="font-bold text-slate-900 text-[15px]">{p.full_name}</p>
-                                                                        <p className="text-xs font-bold text-slate-400 font-mono tracking-wide">ID: {p.registration_number || p.p_id.slice(0, 8)}</p>
+                                                                        <p className="text-xs font-bold text-slate-400 font-mono tracking-wide">
+                                                                            ID: {p.registration_number || p.p_id.slice(0, 8)} • {p.age}Y {p.age_months > 0 ? `${p.age_months}M` : ''} • {p.gender}
+                                                                        </p>
                                                                     </div>
                                                                 </div>
                                                             </td>
@@ -642,10 +652,19 @@ const Reception = () => {
                                                             <Activity className={errors.age ? "text-rose-400" : "text-slate-400"} size={20} />
                                                             <input
                                                                 type="number"
-                                                                placeholder="25"
-                                                                className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none"
+                                                                placeholder="Year"
+                                                                className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none w-16"
                                                                 value={form.age}
                                                                 onChange={(e) => setForm({ ...form, age: e.target.value })}
+                                                            />
+                                                            <div className="w-px h-6 bg-slate-200"></div>
+                                                            <input
+                                                                type="number"
+                                                                placeholder="Month"
+                                                                max={11}
+                                                                className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none w-16"
+                                                                value={form.age_months}
+                                                                onChange={(e) => setForm({ ...form, age_months: e.target.value })}
                                                             />
                                                         </div>
                                                         {errors.age && <p className="text-xs font-bold text-rose-500 mt-2 ml-2 flex items-center gap-1"><AlertCircle size={12} /> {errors.age}</p>}

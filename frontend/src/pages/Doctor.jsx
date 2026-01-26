@@ -291,7 +291,7 @@ const Doctor = () => {
         if (showLoading) setLoading(true);
         try {
             const doctorFilter = user?.role === 'DOCTOR' ? `&doctor=${user.u_id}` : '';
-            const { data } = await api.get(`/reception/visits/?status__in=OPEN,IN_PROGRESS&assigned_role__in=DOCTOR,LAB${doctorFilter}&page=${page}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
+            const { data } = await api.get(`/reception/visits/?status__in=OPEN,IN_PROGRESS&assigned_role__in=DOCTOR${doctorFilter}&page=${page}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
             // Safety filter: Ensure no Pharmacy referrals appear even if backend update lags
             const cleanResults = (data.results || data).filter(v => v.assigned_role !== 'PHARMACY');
             setVisitsData({ ...data, results: cleanResults });
@@ -555,7 +555,7 @@ const Doctor = () => {
                                             <span>ID: {selectedVisit.patient_registration_number || (selectedVisit.v_id || selectedVisit.id).slice(0, 8)}</span>
                                             <span className="w-1 h-1 bg-slate-300 rounded-full" />
                                             <span className="text-blue-600">
-                                                {selectedVisit.patient_gender === 'M' ? 'Male' : selectedVisit.patient_gender === 'F' ? 'Female' : 'Other'} • {selectedVisit.patient_age} Yrs
+                                                {selectedVisit.patient_gender === 'M' ? 'Male' : selectedVisit.patient_gender === 'F' ? 'Female' : 'Other'} • {selectedVisit.patient_age} Yrs {selectedVisit.patient_age_months > 0 ? `${selectedVisit.patient_age_months} Mos` : ''}
                                             </span>
                                         </div>
                                     </div>
