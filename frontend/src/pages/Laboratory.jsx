@@ -633,6 +633,36 @@ const Laboratory = () => {
         } catch (err) { showToast('error', 'Failed to delete category'); }
     };
 
+
+
+    const handleOpenPrintModal = async (charge) => {
+        // Use visit_id if available, otherwise fallback to just this charge
+        const visitId = charge.visit || charge.visit_id;
+
+        if (visitId) {
+            try {
+                // Fetch all COMPLETED charges for this visit to consolidate report
+                // Assuming standard pagination, we might need to handle it or request 'all'
+                // For now, attempting to filter by visit and status. 
+                const res = await api.get(`lab/charges/?visit=${visitId}&status=COMPLETED`);
+                const allTests = res.data.results || res.data; // Handle pagination if present
+
+                setPrintCharge({
+                    ...charge,
+                    tests: allTests.length > 0 ? allTests : [charge]
+                });
+            } catch (error) {
+                console.error("Error fetching visit charges:", error);
+                // Fallback to single charge print if fetch fails
+                setPrintCharge({ ...charge, tests: [charge] });
+            }
+        } else {
+            // No visit ID (shouldn't happen for new data), just print single
+            setPrintCharge({ ...charge, tests: [charge] });
+        }
+        setShowPrintModal(true);
+    };
+
     return (
         <div className="p-6 h-screen bg-[#F8FAFC] font-sans text-slate-900 flex flex-col overflow-hidden print:h-auto print:overflow-visible print:bg-white print:p-0 print:block">
 
@@ -757,8 +787,15 @@ const Laboratory = () => {
                                         {chargesData.results.map(c => (
                                             <tr key={c.lc_id} className="hover:bg-slate-50 transition-colors group">
                                                 <td className="px-6 py-4">
-                                                    <p className="font-bold text-slate-900">{c.patient_name || 'Anonymous'}</p>
-                                                    <p className="text-[10px] font-mono text-slate-400">Reg No: {c.registration_number || 'N/A'}</p>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold font-mono text-xs">
+                                                            {c.registration_number ? c.registration_number.slice(-3) : '---'}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-slate-900">{c.patient_name || 'Anonymous'}</p>
+                                                            <p className="text-[10px] font-mono text-slate-400">Reg No: {c.registration_number || 'N/A'}</p>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
@@ -791,7 +828,7 @@ const Laboratory = () => {
                                                                 </button>
                                                             </>
                                                         ) : c.status === 'COMPLETED' ? (
-                                                            <button onClick={() => { setPrintCharge(c); setShowPrintModal(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-700 shadow-md transition-all">
+                                                            <button onClick={() => handleOpenPrintModal(c)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-700 shadow-md transition-all">
                                                                 <Printer size={14} /> Report
                                                             </button>
                                                         ) : null}
@@ -1614,33 +1651,37 @@ const Laboratory = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="mb-12">
-                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-4">
-                                        {printCharge.test_name} Analysis
-                                    </h3>
-                                    <table className="w-full text-left">
-                                        <thead>
-                                            <tr className="border-b border-slate-200">
-                                                <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
-                                                <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
-                                                <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
-                                                <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {(Array.isArray(printCharge.results)
-                                                ? printCharge.results
-                                                : Object.entries(printCharge.results || {}).map(([key, val]) => ({ name: key, ...val }))
-                                            ).map((val, idx) => (
-                                                <tr key={idx}>
-                                                    <td className="py-4 font-bold text-slate-700 text-sm">{val.name}</td>
-                                                    <td className="py-4 font-black text-slate-900 text-sm">{val.value}</td>
-                                                    <td className="py-4 font-bold text-slate-500 text-xs">{val.unit}</td>
-                                                    <td className="py-4 font-bold text-slate-500 text-xs text-right whitespace-pre-wrap">{val.normal}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="mb-12 space-y-12">
+                                    {(printCharge.tests || [printCharge]).map((testItem, testIdx) => (
+                                        <div key={testIdx} className={testIdx > 0 ? "pt-8 border-t-2 border-slate-100" : ""}>
+                                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-4">
+                                                {testItem.test_name} Analysis
+                                            </h3>
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="border-b border-slate-200">
+                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
+                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
+                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
+                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {(Array.isArray(testItem.results)
+                                                        ? testItem.results
+                                                        : Object.entries(testItem.results || {}).map(([key, val]) => ({ name: key, ...val }))
+                                                    ).map((val, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="py-4 font-bold text-slate-700 text-sm">{val.name}</td>
+                                                            <td className="py-4 font-black text-slate-900 text-sm">{val.value}</td>
+                                                            <td className="py-4 font-bold text-slate-500 text-xs">{val.unit}</td>
+                                                            <td className="py-4 font-bold text-slate-500 text-xs text-right whitespace-pre-wrap">{val.normal}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ))}
                                 </div>
                                 <div className="flex justify-between items-end mt-20 pt-8 border-t border-slate-200">
                                     <div className="text-xs font-medium text-slate-400">
@@ -1698,8 +1739,8 @@ const Laboratory = () => {
                                 z-index: 9999 !important;
                                 background-color: white !important;
                                 color: black !important;
-                                font-size: 12pt;
-                                padding: 40px !important;
+                                font-size: 10pt;
+                                padding: 24px !important;
                                 margin: 0 !important;
                                 visibility: visible !important;
                             }
@@ -1719,85 +1760,89 @@ const Laboratory = () => {
                     </style>
                     <div className="print-portal-content">
                         {/* Header */}
-                        <div className="flex justify-between items-start mb-12 border-b-2 border-slate-900 pb-8">
-                            <div className="flex items-center gap-4">
-                                <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white">
-                                    <TestTube2 size={32} />
+                        <div className="flex justify-between items-start mb-6 border-b-2 border-slate-900 pb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white">
+                                    <TestTube2 size={24} />
                                 </div>
                                 <div>
-                                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITAL</h1>
-                                    <p className="text-sm font-bold text-slate-500 tracking-widest uppercase mt-1">Laboratory Services</p>
-                                    <p className="text-xs font-bold text-slate-400 mt-1">Anjukunnn</p>
+                                    <h1 className="text-2xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITAL</h1>
+                                    <p className="text-xs font-bold text-slate-500 tracking-widest uppercase mt-0.5">Laboratory Services</p>
+                                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">Anjukunnu, Wayanad</p>
                                 </div>
                             </div>
-                            <div className="text-right space-y-1">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Reg No</p>
-                                <p className="text-xl font-black text-slate-900">#{printCharge.registration_number || 'N/A'}</p>
-                                <p className="text-sm font-medium text-slate-500">{new Date().toLocaleDateString()}</p>
+                            <div className="text-right space-y-0.5">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reg No</p>
+                                <p className="text-lg font-black text-slate-900">#{printCharge.registration_number || 'N/A'}</p>
+                                <p className="text-xs font-medium text-slate-500">{new Date().toLocaleDateString()}</p>
                             </div>
                         </div>
 
                         {/* Patient Info */}
-                        <div className="bg-slate-50 rounded-2xl p-6 mb-8 border border-slate-100">
-                            <div className="grid grid-cols-2 gap-y-6 gap-x-12">
+                        <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
+                            <div className="grid grid-cols-2 gap-y-3 gap-x-8">
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Patient Name</p>
-                                    <p className="text-lg font-bold text-slate-900">{printCharge.patient_name}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Patient Name</p>
+                                    <p className="text-sm font-bold text-slate-900">{printCharge.patient_name}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Age / Sex</p>
-                                    <p className="text-lg font-bold text-slate-900">{printCharge.patient_age} Years / {printCharge.patient_sex}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Age / Sex</p>
+                                    <p className="text-sm font-bold text-slate-900">{printCharge.patient_age} Years / {printCharge.patient_sex}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Referred By</p>
-                                    <p className="text-lg font-bold text-slate-900">Dr. {printCharge.doctor_name || 'Consultant'}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Referred By</p>
+                                    <p className="text-sm font-bold text-slate-900">Dr. {printCharge.doctor_name || 'Consultant'}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Specimen</p>
-                                    <p className="text-lg font-bold text-slate-900">{printCharge.specimen || 'Blood'}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Specimen</p>
+                                    <p className="text-sm font-bold text-slate-900">{printCharge.specimen || 'Blood'}</p>
                                 </div>
                             </div>
                         </div>
 
                         {/* Results Table */}
-                        <div className="mb-12">
-                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-4">
-                                {printCharge.test_name} Analysis
-                            </h3>
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="border-b border-slate-200">
-                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
-                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
-                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
-                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {(Array.isArray(printCharge.results)
-                                        ? printCharge.results
-                                        : Object.entries(printCharge.results || {}).map(([key, val]) => ({ name: key, ...val }))
-                                    ).map((val, idx) => (
-                                        <tr key={idx}>
-                                            <td className="py-4 font-bold text-slate-700 text-sm">{val.name}</td>
-                                            <td className="py-4 font-black text-slate-900 text-sm">{val.value}</td>
-                                            <td className="py-4 font-bold text-slate-500 text-xs">{val.unit}</td>
-                                            <td className="py-4 font-bold text-slate-500 text-xs text-right whitespace-pre-wrap">{val.normal}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="mb-6 space-y-6">
+                            {(printCharge.tests || [printCharge]).map((testItem, testIdx) => (
+                                <div key={testIdx} className="break-inside-avoid">
+                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-1 mb-2 mt-4">
+                                        {testItem.test_name} Analysis
+                                    </h3>
+                                    <table className="w-full text-left">
+                                        <thead>
+                                            <tr className="border-b border-slate-200">
+                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
+                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
+                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
+                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {(Array.isArray(testItem.results)
+                                                ? testItem.results
+                                                : Object.entries(testItem.results || {}).map(([key, val]) => ({ name: key, ...val }))
+                                            ).map((val, idx) => (
+                                                <tr key={idx}>
+                                                    <td className="px-2 py-1.5 font-bold text-slate-700 text-xs">{val.name}</td>
+                                                    <td className="px-2 py-1.5 font-black text-slate-900 text-xs">{val.value}</td>
+                                                    <td className="px-2 py-1.5 font-bold text-slate-500 text-[10px]">{val.unit}</td>
+                                                    <td className="px-2 py-1.5 font-bold text-slate-500 text-[10px] text-right whitespace-pre-wrap">{val.normal}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ))}
                         </div>
 
                         {/* Footer */}
-                        <div className="flex justify-between items-end mt-auto pt-8 border-t border-slate-200">
-                            <div className="text-xs font-medium text-slate-400">
+                        <div className="flex justify-between items-end mt-auto pt-4 border-t border-slate-200">
+                            <div className="text-[10px] font-medium text-slate-400">
                                 <p>Generated by REVIVE Hospital Management System</p>
                                 <p>{new Date().toLocaleString()}</p>
                             </div>
                             <div className="text-center">
-                                <div className="h-12 w-32 mb-2 mx-auto"></div>
-                                <p className="text-sm font-bold text-slate-900">{printCharge.technician_name}</p>
+                                <div className="h-8 w-24 mb-1 mx-auto"></div>
+                                <p className="text-xs font-bold text-slate-900">{printCharge.technician_name}</p>
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lab Technician</p>
                             </div>
                         </div>
