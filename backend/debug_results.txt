@@ -1,0 +1,15 @@
+Checking Financials for period: 2026-01-01 00:00:00+00:00 to 2026-01-27 06:29:08.387803+00:00
+Total Invoices: 4
+PAID Invoices: 2
+Revenue from invoices: 2584.25
+Total Payment Transactions: 4
+Total Collected Amount: 2584.25
+
+--- DEBUGGING PURCHASE INVOICES ---
+Total Purchase Invoices in DB: 1
+ID: a13b45d8-0d77-42f3-86a0-e354b4b5742a, InvNo: KDL-14964, Date: 2025-10-20, Amount: 1474.34
+Filtered Purchase Invoices (Jan 1 - 2026-01-27): 0
+Total Purchase Amount (Filtered): 0
+Total Lab Purchases: 0
+Total Lab Stock-In Logs: 0
+Total Lab Stock-In Cost: 0

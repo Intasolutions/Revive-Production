@@ -234,6 +234,42 @@ class LabChargeViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 print(f"Inventory Auto-Stockout Error: {e}")
 
+            # --- AUTO RETURN TO DOCTOR ---
+            # If status became COMPLETED, send patient back to Doctor's queue
+            # so they can see the results.
+            # UPDATE: Only send back if the valid referral came from doctor.
+            if instance.visit and instance.visit.assigned_role == 'LAB':
+                should_notify = False
+                
+                # Check Doctor Note for this test
+                try:
+                    if hasattr(instance.visit, 'doctor_note'):
+                        note = instance.visit.doctor_note
+                        referral_text = (note.lab_referral_details or "").lower()
+                        # Normalize test name for permissive matching
+                        current_test = instance.test_name.lower().strip()
+                        
+                        # Basic substring check - effective enough for now
+                        if current_test in referral_text:
+                            should_notify = True
+                except Exception:
+                    pass
+
+                if should_notify:
+                    instance.visit.assigned_role = 'DOCTOR'
+                    instance.visit.status = 'OPEN' 
+                    instance.visit.save()
+                    
+                    # Notify Doctor
+                    from core.models import Notification
+                    if instance.visit.doctor:
+                        Notification.objects.create(
+                            recipient=instance.visit.doctor,
+                            message=f"Lab Results Ready: {instance.visit.patient.full_name} ({instance.test_name})",
+                            type='LAB_RESULT',
+                            related_id=instance.visit.id
+                        )
+
             # --- BILLING LOGIC ---
             # 1. Get/Create Invoice for this Visit
             # We look for a pending invoice for this visit, or create one.

@@ -225,6 +225,17 @@ class PharmacyBulkUploadView(APIView):
                         if manufacturer: stock.manufacturer = manufacturer
                         if hsn: stock.hsn = hsn
                         stock.save()
+                    
+                    # --- Notification Cleanup ---
+                    try:
+                        if stock.qty_available > stock.reorder_level:
+                            from core.models import Notification
+                            # Use Q for cleaner syntax and to avoid keyword repetition errors
+                            Notification.objects.filter(
+                                Q(message__icontains=f"Low stock alert: {stock.name}") &
+                                Q(message__icontains=stock.batch_no)
+                            ).delete()
+                    except: pass
 
                     items_created += 1
 

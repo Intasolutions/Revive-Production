@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers
 from .models import (
     Supplier, PharmacyStock, PurchaseInvoice, PurchaseItem,
@@ -229,6 +230,19 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                 stock.manufacturer = item.get('manufacturer', stock.manufacturer)
                 stock.is_deleted = False
                 stock.save()
+
+            # --- Notification Cleanup ---
+            try:
+                # If stock is now healthy (above reorder level + buffer), clear low stock alerts
+                if stock.qty_available > stock.reorder_level:
+                    from core.models import Notification
+                    # Use Q for cleaner syntax
+                    Notification.objects.filter(
+                        Q(message__icontains=f"Low stock alert: {stock.name}") &
+                        Q(message__icontains=stock.batch_no)
+                    ).delete()
+            except Exception as e:
+                print(f"Failed to clear notifications: {e}")
 
 
 class PharmacySaleItemSerializer(serializers.ModelSerializer):

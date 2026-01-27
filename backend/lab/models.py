@@ -133,6 +133,7 @@ class LabCharge(BaseModel):
     )
     visit = models.ForeignKey(Visit, on_delete=models.CASCADE, related_name='lab_charges')
     test_name = models.CharField(max_length=255)
+    sub_name = models.CharField(max_length=255, blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     
@@ -156,6 +157,7 @@ class LabCategory(BaseModel):
 
 class LabTest(BaseModel):
     name = models.CharField(max_length=255)
+    sub_name = models.CharField(max_length=255, blank=True, null=True)
     category = models.CharField(max_length=50) # Managed via LabCategory, but kept loose for flexibility
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     gender = models.CharField(max_length=1, choices=[('M', 'Male'), ('F', 'Female'), ('B', 'Both')], default='B')

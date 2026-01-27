@@ -26,6 +26,23 @@ const Billing = () => {
     const [page, setPage] = useState(1);
     const globalSearch = searchTerm; // Map searchTerm to globalSearch for compatibility with the copied logic
 
+    // --- Date Filter State ---
+    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // 1-12
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+    const MONTHS = [
+        { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
+        { value: 4, label: 'April' }, { value: 5, label: 'May' }, { value: 6, label: 'June' },
+        { value: 7, label: 'July' }, { value: 8, label: 'August' }, { value: 9, label: 'September' },
+        { value: 10, label: 'October' }, { value: 11, label: 'November' }, { value: 12, label: 'December' }
+    ];
+
+    const generateYears = () => {
+        const currentYear = new Date().getFullYear();
+        return Array.from({ length: 5 }, (_, i) => currentYear - i);
+    };
+    const YEARS = generateYears();
+
     // --- Forms ---
     const [doctors, setDoctors] = useState([]);
     const [patients, setPatients] = useState([]);
@@ -79,13 +96,14 @@ const Billing = () => {
             clearInterval(interval);
             socket.off('pharmacy_sale_update', onPharmacySale);
         };
-    }, [page, globalSearch]);
+
+    }, [page, globalSearch, selectedMonth, selectedYear]);
 
     // --- API Calls ---
     const fetchInvoices = async (showLoading = true) => {
         if (showLoading) setLoading(true);
         try {
-            const { data } = await api.get(`/billing/invoices/?page=${page}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
+            const { data } = await api.get(`/billing/invoices/?page=${page}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}&month=${selectedMonth}&year=${selectedYear}`);
             setInvoices(data.results || (Array.isArray(data) ? data : []));
         } catch (err) {
             showToast('error', 'Failed to load invoices.');
@@ -112,7 +130,7 @@ const Billing = () => {
     const fetchStats = async (showLoading = false) => {
         if (showLoading) setLoading(true);
         try {
-            const { data } = await api.get('/billing/invoices/stats/');
+            const { data } = await api.get(`/billing/invoices/stats/?month=${selectedMonth}&year=${selectedYear}`);
             setStats(data);
         } catch (err) {
             console.error('Failed to load billing stats', err);
@@ -629,8 +647,28 @@ const Billing = () => {
                             <span>{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                         </div>
                     </div>
-                    <div className="flex gap-3">
-                        <button className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 font-bold text-xs uppercase tracking-wider transition-colors shadow-sm">
+                    <div className="flex gap-3 items-end">
+                        {/* Date Filter Controls */}
+                        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm h-[42px]">
+                            <Calendar size={16} className="text-slate-400" />
+                            <select
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                            >
+                                {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                            </select>
+                            <div className="w-px h-4 bg-slate-200"></div>
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer"
+                            >
+                                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </div>
+
+                        <button className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 font-bold text-xs uppercase tracking-wider transition-colors shadow-sm h-[42px]">
                             <Download size={16} /> Reports
                         </button>
                         <button

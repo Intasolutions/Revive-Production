@@ -185,7 +185,8 @@ const Pharmacy = () => {
     const fetchPendingVisits = useCallback(async (showLoading = false) => {
         if (showLoading) setLoading(true);
         try {
-            const { data } = await api.get('reception/visits/?assigned_role=PHARMACY&status=OPEN');
+            // Updated to use specialized PharmacyQueueViewSet which handles parallel flow (Lab + Rx)
+            const { data } = await api.get('pharmacy/queue/');
             setPendingVisits(Array.isArray(data) ? data : (data.results || []));
         } catch (err) { setPendingVisits([]); }
         finally { if (showLoading) setLoading(false); }

@@ -17,11 +17,20 @@ class IsAdminOrReception(permissions.BasePermission):
 class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all().order_by('-created_at')
     serializer_class = InvoiceSerializer
-    permission_classes = [IsAdminOrReception]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['visit__patient__full_name', 'patient_name', 'payment_status']
-    filterset_fields = ['payment_status', 'visit__doctor', 'visit__patient', 'visit__patient__id']
-    ordering_fields = ['created_at', 'total_amount']
+
+    def get_queryset(self):
+        queryset = Invoice.objects.all().order_by('-created_at')
+        
+        month = self.request.query_params.get('month')
+        year = self.request.query_params.get('year')
+        
+        if month and year:
+            try:
+                queryset = queryset.filter(created_at__month=month, created_at__year=year)
+            except ValueError:
+                pass
+                
+        return queryset
 
     def perform_create(self, serializer):
         invoice = serializer.save()
@@ -145,18 +154,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         today = timezone.now().date()
-        current_month = timezone.now().month
-        current_year = timezone.now().year
         
-        # Revenue Today (Sum of payments made TODAY, regardless of invoice date? Or invoices created today?)
-        # Usually "Today's Collection" refers to actual money received today.
-        # "Today's Revenue" might mean invoices generated. 
-        # Let's stick to previous logic: Invoices created today that are fully paid.
-        # OR better: Sum of PaymentTransactions created today.
-        
-        # Let's match User Request: "total amount credited with monthly wise"
-        
-        # 1. Total Collection This Month (Sum of all PaymentTransactions in current month)
+        # Get query params for month/year, default to current
+        try:
+            current_month = int(request.query_params.get('month', timezone.now().month))
+            current_year = int(request.query_params.get('year', timezone.now().year))
+        except ValueError:
+            current_month = timezone.now().month
+            current_year = timezone.now().year
+
+        # 1. Total Collection This Month (Sum of all PaymentTransactions in filtered month)
         monthly_payments = PaymentTransaction.objects.filter(
             created_at__month=current_month,
             created_at__year=current_year
@@ -168,21 +175,27 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         upi_monthly = monthly_payments.filter(mode='UPI').aggregate(Sum('amount'))['amount__sum'] or 0
         card_monthly = monthly_payments.filter(mode='CARD').aggregate(Sum('amount'))['amount__sum'] or 0
 
-        # Note: Original code was "Billed Today". Let's keep supporting "today's stats" for original cards, 
-        # and add "monthly_stats" for the new request.
+        # Collection Today (Actual payments received today) - Always TODAY regardless of filter?
+        # User request: "IF SELECT JAN SHOW JAN FULL DATA"
+        # Since 'revenue_today' is specifically 'today', it might be confusing if it shows January data when looking at January in March.
+        # But 'revenue_today' explicitly says TODAY. 
+        # However, typically filters apply to the whole view. 
+        # If filtering for a past month, 'revenue_today' (meaning 'revenue on that day') is ambiguous.
+        # It's safest to leave 'revenue_today' as ACTUALLY TODAY, because the user can see monthly totals in the summary.
+        # Or should 'revenue_today' become 'Revenue for Selected Period'?
+        # The UI shows "Financial Overview - [Current Date]". 
+        # Let's keep 'revenue_today' as ACTUAL TODAY to avoid confusion with the header date which is current date.
         
-        # Revenue Today (Invoices generated today that are paid) - OLD LOGIC
-        # revenue_today = Invoice.objects.filter(created_at__date=today, payment_status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-        
-        # Collection Today (Actual payments received today) - BETTER LOGIC
         collection_today = PaymentTransaction.objects.filter(created_at__date=today).aggregate(Sum('amount'))['amount__sum'] or 0
 
-        # Pending Amount
-        pending = Invoice.objects.filter(payment_status='PENDING').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-        
-        # Subtract partial payments from pending total?
-        # Detailed logic: Sum(Invoice Total) - Sum(Payments for Pending Invoices)
-        # Simplified: Just sum invoice totals for now, or refine if needed.
+        # Pending Amount (Global or Monthly?) -> "Pending" is usually a current state of liability.
+        # Filtering it by month means "Invoices created in this month that are still pending".
+        # Let's filter pending by the selected month/year too to keep context.
+        pending_query = Invoice.objects.filter(payment_status='PENDING')
+        if request.query_params.get('month') and request.query_params.get('year'):
+             pending_query = pending_query.filter(created_at__month=current_month, created_at__year=current_year)
+             
+        pending = pending_query.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
         
         count = Invoice.objects.filter(created_at__date=today).count()
 

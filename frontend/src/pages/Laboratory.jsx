@@ -55,9 +55,78 @@ const Laboratory = () => {
     const [inventoryData, setInventoryData] = useState({ results: [], count: 0 });
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('queue'); // queue | inventory
-    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('PENDING');
     const [page, setPage] = useState(1);
     const [labTests, setLabTests] = useState([]);
+
+    // Group charges by visit AND distinct request times (Session-based grouping)
+    const groupedCharges = React.useMemo(() => {
+        const visitBuckets = {};
+        chargesData.results.forEach(charge => {
+            const visitId = charge.visit?.id || charge.visit || `unknown_${charge.patient_name}`;
+            if (!visitBuckets[visitId]) visitBuckets[visitId] = [];
+            visitBuckets[visitId].push(charge);
+        });
+
+        const finalGroups = [];
+
+        Object.values(visitBuckets).forEach(visitCharges => {
+            // Sort: Oldest to Newest to find gaps
+            visitCharges.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+            let currentSubGroup = [];
+
+            visitCharges.forEach((charge, idx) => {
+                if (idx === 0) {
+                    currentSubGroup.push(charge);
+                    return;
+                }
+
+                const prevCharge = visitCharges[idx - 1];
+                const timeDiff = new Date(charge.created_at) - new Date(prevCharge.created_at);
+                // 45 Minute threshold for "Same Request Batch"
+                const isSameBatch = timeDiff < (45 * 60 * 1000);
+
+                if (isSameBatch) {
+                    currentSubGroup.push(charge);
+                } else {
+                    finalGroups.push(buildGroup(currentSubGroup));
+                    currentSubGroup = [charge];
+                }
+            });
+            if (currentSubGroup.length > 0) finalGroups.push(buildGroup(currentSubGroup));
+        });
+
+        function buildGroup(items) {
+            const first = items[0];
+            const allCompleted = items.every(i => i.status === 'COMPLETED' || i.status === 'CANCELLED');
+            const anyPending = items.some(i => i.status === 'PENDING');
+
+            let status = 'CANCELLED';
+            if (allCompleted) status = 'COMPLETED';
+            else if (anyPending) status = 'PENDING';
+
+            // Unique Key: VisitID + Time of first item (ensures uniqueness for separate batches)
+            const uniqueKey = `${first.visit?.id || first.visit}_${new Date(first.created_at).getTime()}`;
+
+            return {
+                uniqueKey,
+                visitId: first.visit?.id || first.visit,
+                visitObj: first.visit,
+                patient_name: first.patient_name,
+                registration_number: first.registration_number,
+                patient_age: first.patient_age,
+                patient_sex: first.patient_sex,
+                doctor_name: first.doctor_name,
+                created_at: first.created_at,
+                status,
+                items
+            };
+        }
+
+        // Sort final groups by newest first (for display)
+        return finalGroups.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }, [chargesData.results]);
 
     // Supplier State
     const [showSupplierModal, setShowSupplierModal] = useState(false);
@@ -66,7 +135,7 @@ const Laboratory = () => {
     // Test Catalog Form
     const [showTestModal, setShowTestModal] = useState(false);
     const [editingTestId, setEditingTestId] = useState(null);
-    const [testCatalogForm, setTestCatalogForm] = useState({ name: '', category: 'HAEMATOLOGY', price: '', gender: 'B', normal_range: '', parameters: [], required_items: [] });
+    const [testCatalogForm, setTestCatalogForm] = useState({ name: '', sub_name: '', category: 'HAEMATOLOGY', price: '', gender: 'B', normal_range: '', parameters: [], required_items: [] });
 
     // Modals
     const [showModal, setShowModal] = useState(false); // Add Test Modal
@@ -317,7 +386,7 @@ const Laboratory = () => {
             }
             setShowTestModal(false);
             setEditingTestId(null);
-            setTestCatalogForm({ name: '', category: 'HAEMATOLOGY', price: '', gender: 'B', normal_range: '', parameters: [], required_items: [] });
+            setTestCatalogForm({ name: '', sub_name: '', category: 'HAEMATOLOGY', price: '', gender: 'B', normal_range: '', parameters: [], required_items: [] });
             fetchLabTests();
         } catch (err) { showToast('error', 'Failed to save test'); }
     };
@@ -325,6 +394,7 @@ const Laboratory = () => {
     const handleEditTest = (test) => {
         setTestCatalogForm({
             name: test.name,
+            sub_name: test.sub_name || '',
             category: test.category,
             price: test.price,
             gender: test.gender || 'B',
@@ -443,7 +513,9 @@ const Laboratory = () => {
             await Promise.all(selectedTests.map(test =>
                 api.post('lab/charges/', {
                     visit: selectedVisit.v_id || selectedVisit.id,
+
                     test_name: test.name,
+                    sub_name: test.sub_name,
                     amount: test.price || 0, // Ensure amount is set
                     status: 'PENDING'
                 })
@@ -635,30 +707,23 @@ const Laboratory = () => {
 
 
 
-    const handleOpenPrintModal = async (charge) => {
-        // Use visit_id if available, otherwise fallback to just this charge
-        const visitId = charge.visit || charge.visit_id;
-
-        if (visitId) {
-            try {
-                // Fetch all COMPLETED charges for this visit to consolidate report
-                // Assuming standard pagination, we might need to handle it or request 'all'
-                // For now, attempting to filter by visit and status. 
-                const res = await api.get(`lab/charges/?visit=${visitId}&status=COMPLETED`);
-                const allTests = res.data.results || res.data; // Handle pagination if present
-
-                setPrintCharge({
-                    ...charge,
-                    tests: allTests.length > 0 ? allTests : [charge]
-                });
-            } catch (error) {
-                console.error("Error fetching visit charges:", error);
-                // Fallback to single charge print if fetch fails
-                setPrintCharge({ ...charge, tests: [charge] });
-            }
+    const handleOpenPrintModal = async (groupOrCharge) => {
+        // If it's a group, use it directly
+        if (groupOrCharge.items) {
+            setPrintCharge({
+                ...groupOrCharge.items[0], // Use first item for patient details
+                tests: groupOrCharge.items, // All tests in group
+                isGroup: true,
+                groupStatus: groupOrCharge.status
+            });
         } else {
-            // No visit ID (shouldn't happen for new data), just print single
-            setPrintCharge({ ...charge, tests: [charge] });
+            // It's a single charge (fallback) or from a different context
+            setPrintCharge({
+                ...groupOrCharge,
+                tests: [groupOrCharge],
+                isGroup: false,
+                groupStatus: groupOrCharge.status
+            });
         }
         setShowPrintModal(true);
     };
@@ -696,7 +761,7 @@ const Laboratory = () => {
                                 </button>
                             </div>
                         ) : activeTab === 'test_catalog' ? (
-                            <button onClick={() => { setEditingTestId(null); setTestCatalogForm({ name: '', category: 'HAEMATOLOGY', price: '', normal_range: '', parameters: [] }); setShowTestModal(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-95">
+                            <button onClick={() => { setEditingTestId(null); setTestCatalogForm({ name: '', sub_name: '', category: 'HAEMATOLOGY', price: '', normal_range: '', parameters: [] }); setShowTestModal(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-95">
                                 <Plus size={18} /> Add Test
                             </button>
                         ) : activeTab === 'suppliers' ? (
@@ -783,55 +848,88 @@ const Laboratory = () => {
                                             ))
                                         )}
 
-                                        {/* Actual Lab Charges */}
-                                        {chargesData.results.map(c => (
-                                            <tr key={c.lc_id} className="hover:bg-slate-50 transition-colors group">
+                                        {/* Actual Lab Charges - GROUPED */}
+                                        {groupedCharges.map(group => (
+                                            <tr key={group.uniqueKey} className="hover:bg-slate-50 transition-colors group align-top border-b border-slate-50">
+                                                {/* Patient Info */}
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold font-mono text-xs">
-                                                            {c.registration_number ? c.registration_number.slice(-3) : '---'}
+                                                            {group.registration_number ? group.registration_number.slice(-3) : '---'}
                                                         </div>
                                                         <div>
-                                                            <p className="font-bold text-slate-900">{c.patient_name || 'Anonymous'}</p>
-                                                            <p className="text-[10px] font-mono text-slate-400">Reg No: {c.registration_number || 'N/A'}</p>
+                                                            <p className="font-bold text-slate-900">{group.patient_name || 'Anonymous'}</p>
+                                                            <p className="text-[10px] font-mono text-slate-400">Reg No: {group.registration_number || 'N/A'}</p>
                                                         </div>
                                                     </div>
                                                 </td>
+
+                                                {/* Tests List */}
                                                 <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <Microscope size={16} className="text-slate-400" />
-                                                        <span className="font-bold text-slate-700 text-sm">{c.test_name}</span>
+                                                    <div className="flex flex-col gap-1">
+                                                        {group.items.map((test, idx) => (
+                                                            <div key={test.lc_id} className="flex items-center gap-2">
+                                                                <div className={`w-1.5 h-1.5 rounded-full ${test.status === 'COMPLETED' ? 'bg-emerald-500' : test.status === 'CANCELLED' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                                                                <span className={`font-bold text-xs ${test.status === 'COMPLETED' ? 'text-emerald-700' : test.status === 'CANCELLED' ? 'text-red-400 line-through' : 'text-slate-700'}`}>
+                                                                    {test.test_name}
+                                                                </span>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-sm font-medium text-slate-600">{c.patient_age}Y / {c.patient_sex}</td>
-                                                <td className="px-6 py-4 text-xs text-slate-500 font-medium">#{c.lc_id.toString().slice(0, 6)}</td>
+
+                                                {/* Age/Sex */}
+                                                <td className="px-6 py-4 text-sm font-medium text-slate-600">{group.patient_age}Y / {group.patient_sex}</td>
+
+                                                {/* Ref */}
                                                 <td className="px-6 py-4">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide border ${c.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                        c.status === 'CANCELLED' ? 'bg-red-50 text-red-600 border-red-100' :
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-slate-700">Dr. {group.doctor_name || 'Ref'}</span>
+                                                        <span className="text-[10px] text-slate-400">{new Date(group.created_at).toLocaleDateString()}</span>
+                                                    </div>
+                                                </td>
+
+                                                {/* Group Status */}
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide border ${group.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                        group.status === 'CANCELLED' ? 'bg-red-50 text-red-600 border-red-100' :
                                                             'bg-amber-50 text-amber-600 border-amber-100'
                                                         }`}>
-                                                        {c.status === 'COMPLETED' && <CheckCircle2 size={12} />}
-                                                        {c.status === 'PENDING' && <Clock size={12} />}
-                                                        {c.status}
+                                                        {group.status === 'COMPLETED' && <CheckCircle2 size={12} />}
+                                                        {group.status === 'PENDING' && <Clock size={12} />}
+                                                        {group.status}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 font-bold text-slate-900">₹{c.amount}</td>
+
+                                                {/* Total Cost */}
+                                                <td className="px-6 py-4 font-bold text-slate-900">
+                                                    ₹{group.items.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0).toFixed(2)}
+                                                </td>
+
+                                                {/* Actions */}
                                                 <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        {c.status === 'PENDING' ? (
-                                                            <>
-                                                                <button onClick={() => handleOpenResultEntry(c)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 hover:shadow-sm transition-all" title="Enter Result">
-                                                                    <FlaskConical size={16} />
-                                                                </button>
-                                                                <button onClick={() => handleUpdateStatus(c.lc_id, 'CANCELLED')} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                                                                    <X size={16} />
-                                                                </button>
-                                                            </>
-                                                        ) : c.status === 'COMPLETED' ? (
-                                                            <button onClick={() => handleOpenPrintModal(c)} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-700 shadow-md transition-all">
-                                                                <Printer size={14} /> Report
-                                                            </button>
-                                                        ) : null}
+                                                    <div className="flex flex-col gap-2">
+                                                        {/* Individual Actions if Pending */}
+                                                        {group.status === 'PENDING' && (
+                                                            <div className="flex gap-1 flex-wrap">
+                                                                {group.items.filter(i => i.status === 'PENDING').map(t => (
+                                                                    <button
+                                                                        key={t.lc_id}
+                                                                        onClick={() => handleOpenResultEntry(t)}
+                                                                        className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded hover:bg-blue-100 transition-all border border-blue-100"
+                                                                        title={`Enter Result for ${t.test_name}`}
+                                                                    >
+                                                                        Result: {t.test_name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Consolidated Print Action */}
+                                                        <button onClick={() => handleOpenPrintModal(group)} className="flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-700 shadow-md transition-all">
+                                                            <Printer size={14} />
+                                                            {group.status === 'PENDING' ? 'Print Receipt' : 'Print Report'}
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1043,6 +1141,10 @@ const Laboratory = () => {
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Test Name</label>
                                         <Input value={testCatalogForm.name} onChange={e => setTestCatalogForm({ ...testCatalogForm, name: e.target.value })} required className="bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Sub Name</label>
+                                        <Input value={testCatalogForm.sub_name} onChange={e => setTestCatalogForm({ ...testCatalogForm, sub_name: e.target.value })} className="bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="e.g. Method: ELISA" />
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Category</label>
@@ -1408,6 +1510,7 @@ const Laboratory = () => {
                                                         if (!selectedTests.some(t => t.name === test.name)) {
                                                             setSelectedTests(prev => [...prev, {
                                                                 name: test.name,
+                                                                sub_name: test.sub_name,
                                                                 price: test.price,
                                                                 isCustom: false
                                                             }]);
@@ -1622,7 +1725,9 @@ const Laboratory = () => {
                                         </div>
                                         <div>
                                             <h1 className="text-3xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITAL</h1>
-                                            <p className="text-sm font-bold text-slate-500 tracking-widest uppercase mt-1">Laboratory Services</p>
+                                            <p className="text-sm font-bold text-slate-500 tracking-widest uppercase mt-1">
+                                                {printCharge.groupStatus === 'PENDING' ? 'Lab Request / Receipt' : 'Laboratory Report'}
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="text-right space-y-1">
@@ -1651,38 +1756,72 @@ const Laboratory = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="mb-12 space-y-12">
-                                    {(printCharge.tests || [printCharge]).map((testItem, testIdx) => (
-                                        <div key={testIdx} className={testIdx > 0 ? "pt-8 border-t-2 border-slate-100" : ""}>
-                                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-4">
-                                                {testItem.test_name} Analysis
-                                            </h3>
-                                            <table className="w-full text-left">
-                                                <thead>
-                                                    <tr className="border-b border-slate-200">
-                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
-                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
-                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
-                                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
+                                {printCharge.groupStatus === 'PENDING' ? (
+                                    // *** REQUEST / RECEIPT VIEW ***
+                                    <div className="mb-12">
+                                        <table className="w-full text-left">
+                                            <thead>
+                                                <tr className="border-b-2 border-slate-900">
+                                                    <th className="p-4 text-xs font-black text-slate-900 uppercase tracking-widest w-3/4">Test Description</th>
+                                                    <th className="p-4 text-xs font-black text-slate-900 uppercase tracking-widest w-1/4 text-right">Cost</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {(printCharge.tests || []).map((test, idx) => (
+                                                    <tr key={idx}>
+                                                        <td className="p-4 font-bold text-slate-800">
+                                                            {test.test_name}
+                                                            {test.sub_name && <span className="block text-xs font-normal text-slate-500">{test.sub_name}</span>}
+                                                        </td>
+                                                        <td className="p-4 font-mono font-bold text-slate-900 text-right">₹{parseFloat(test.amount).toFixed(2)}</td>
                                                     </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {(Array.isArray(testItem.results)
-                                                        ? testItem.results
-                                                        : Object.entries(testItem.results || {}).map(([key, val]) => ({ name: key, ...val }))
-                                                    ).map((val, idx) => (
-                                                        <tr key={idx}>
-                                                            <td className="py-4 font-bold text-slate-700 text-sm">{val.name}</td>
-                                                            <td className="py-4 font-black text-slate-900 text-sm">{val.value}</td>
-                                                            <td className="py-4 font-bold text-slate-500 text-xs">{val.unit}</td>
-                                                            <td className="py-4 font-bold text-slate-500 text-xs text-right whitespace-pre-wrap">{val.normal}</td>
+                                                ))}
+                                                <tr className="bg-slate-50">
+                                                    <td className="p-4 text-sm font-black text-slate-900 uppercase tracking-widest text-right">Total Amount</td>
+                                                    <td className="p-4 font-mono font-black text-emerald-600 text-lg text-right">
+                                                        ₹{printCharge.tests.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0).toFixed(2)}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    // *** REPORT VIEW (Original) ***
+                                    <div className="mb-12 space-y-12">
+                                        {(printCharge.tests || [printCharge]).map((testItem, testIdx) => (
+                                            <div key={testIdx} className={testIdx > 0 ? "pt-8 border-t-2 border-slate-100" : ""}>
+                                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-2 mb-4">
+                                                    {testItem.test_name} Analysis
+                                                    {testItem.sub_name && <span className="block text-xs font-bold text-slate-500 mt-1">{testItem.sub_name}</span>}
+                                                </h3>
+                                                <table className="w-full text-left">
+                                                    <thead>
+                                                        <tr className="border-b border-slate-200">
+                                                            <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
+                                                            <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
+                                                            <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
+                                                            <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    ))}
-                                </div>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {(Array.isArray(testItem.results)
+                                                            ? testItem.results
+                                                            : Object.entries(testItem.results || {}).map(([key, val]) => ({ name: key, ...val }))
+                                                        ).map((val, idx) => (
+                                                            <tr key={idx}>
+                                                                <td className="py-4 font-bold text-slate-700 text-sm">{val.name}</td>
+                                                                <td className="py-4 font-black text-slate-900 text-sm">{val.value}</td>
+                                                                <td className="py-4 font-bold text-slate-500 text-xs">{val.unit}</td>
+                                                                <td className="py-4 font-bold text-slate-500 text-xs text-right whitespace-pre-wrap">{val.normal}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ))}
+
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-end mt-20 pt-8 border-t border-slate-200">
                                     <div className="text-xs font-medium text-slate-400">
                                         <p>Generated by REVIVE Hospital Management System</p>
@@ -1702,16 +1841,17 @@ const Laboratory = () => {
                                     <Printer size={18} className="mr-2" /> Print Report
                                 </Button>
                             </div>
-                        </motion.div>
-                    </div>
+                        </motion.div >
+                    </div >
                 )}
             </AnimatePresence >
 
             {/* Print View - PORTAL STRATEGY */}
-            {printCharge && createPortal(
-                <>
-                    <style type="text/css">
-                        {`
+            {
+                printCharge && createPortal(
+                    <>
+                        <style type="text/css">
+                            {`
                         @media screen {
                             .print-portal-content {
                                 display: none;
@@ -1757,99 +1897,131 @@ const Laboratory = () => {
                             }
                         }
                         `}
-                    </style>
-                    <div className="print-portal-content">
-                        {/* Header */}
-                        <div className="flex justify-between items-start mb-6 border-b-2 border-slate-900 pb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white">
-                                    <TestTube2 size={24} />
+                        </style>
+                        <div className="print-portal-content">
+                            {/* Header */}
+                            <div className="flex justify-between items-start mb-6 border-b-2 border-slate-900 pb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white">
+                                        <TestTube2 size={24} />
+                                    </div>
+                                    <div>
+                                        <h1 className="text-2xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITAL</h1>
+                                        <p className="text-xs font-bold text-slate-500 tracking-widest uppercase mt-0.5">
+                                            {printCharge.groupStatus === 'PENDING' ? 'Lab Request / Receipt' : 'Laboratory Services'}
+                                        </p>
+                                        <p className="text-[10px] font-bold text-slate-400 mt-0.5">Anjukunnu, Wayanad</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h1 className="text-2xl font-black text-slate-900 tracking-tighter">REVIVE HOSPITAL</h1>
-                                    <p className="text-xs font-bold text-slate-500 tracking-widest uppercase mt-0.5">Laboratory Services</p>
-                                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">Anjukunnu, Wayanad</p>
+                                <div className="text-right space-y-0.5">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reg No</p>
+                                    <p className="text-lg font-black text-slate-900">#{printCharge.registration_number || 'N/A'}</p>
+                                    <p className="text-xs font-medium text-slate-500">{new Date().toLocaleDateString()}</p>
                                 </div>
                             </div>
-                            <div className="text-right space-y-0.5">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reg No</p>
-                                <p className="text-lg font-black text-slate-900">#{printCharge.registration_number || 'N/A'}</p>
-                                <p className="text-xs font-medium text-slate-500">{new Date().toLocaleDateString()}</p>
-                            </div>
-                        </div>
 
-                        {/* Patient Info */}
-                        <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
-                            <div className="grid grid-cols-2 gap-y-3 gap-x-8">
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Patient Name</p>
-                                    <p className="text-sm font-bold text-slate-900">{printCharge.patient_name}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Age / Sex</p>
-                                    <p className="text-sm font-bold text-slate-900">{printCharge.patient_age} Years / {printCharge.patient_sex}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Referred By</p>
-                                    <p className="text-sm font-bold text-slate-900">Dr. {printCharge.doctor_name || 'Consultant'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Specimen</p>
-                                    <p className="text-sm font-bold text-slate-900">{printCharge.specimen || 'Blood'}</p>
+                            {/* Patient Info */}
+                            <div className="bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
+                                <div className="grid grid-cols-2 gap-y-3 gap-x-8">
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Patient Name</p>
+                                        <p className="text-sm font-bold text-slate-900">{printCharge.patient_name}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Age / Sex</p>
+                                        <p className="text-sm font-bold text-slate-900">{printCharge.patient_age} Years / {printCharge.patient_sex}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Referred By</p>
+                                        <p className="text-sm font-bold text-slate-900">Dr. {printCharge.doctor_name || 'Consultant'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Specimen</p>
+                                        <p className="text-sm font-bold text-slate-900">{printCharge.specimen || 'Blood'}</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Results Table */}
-                        <div className="mb-6 space-y-6">
-                            {(printCharge.tests || [printCharge]).map((testItem, testIdx) => (
-                                <div key={testIdx} className="break-inside-avoid">
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-1 mb-2 mt-4">
-                                        {testItem.test_name} Analysis
-                                    </h3>
+                            {/* Results Table OR Receipt Table */}
+                            <div className="mb-6 space-y-6">
+                                {printCharge.groupStatus === 'PENDING' ? (
                                     <table className="w-full text-left">
                                         <thead>
-                                            <tr className="border-b border-slate-200">
-                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
-                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
-                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
-                                                <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
+                                            <tr className="border-b-2 border-slate-900">
+                                                <th className="px-2 py-2 text-[10px] font-black text-slate-900 uppercase tracking-widest w-3/4">Test Description</th>
+                                                <th className="px-2 py-2 text-[10px] font-black text-slate-900 uppercase tracking-widest w-1/4 text-right">Cost</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
-                                            {(Array.isArray(testItem.results)
-                                                ? testItem.results
-                                                : Object.entries(testItem.results || {}).map(([key, val]) => ({ name: key, ...val }))
-                                            ).map((val, idx) => (
+                                            {(printCharge.tests || []).map((test, idx) => (
                                                 <tr key={idx}>
-                                                    <td className="px-2 py-1.5 font-bold text-slate-700 text-xs">{val.name}</td>
-                                                    <td className="px-2 py-1.5 font-black text-slate-900 text-xs">{val.value}</td>
-                                                    <td className="px-2 py-1.5 font-bold text-slate-500 text-[10px]">{val.unit}</td>
-                                                    <td className="px-2 py-1.5 font-bold text-slate-500 text-[10px] text-right whitespace-pre-wrap">{val.normal}</td>
+                                                    <td className="px-2 py-2 font-bold text-slate-800 text-xs">
+                                                        {test.test_name}
+                                                        {test.sub_name && <span className="block text-[10px] font-normal text-slate-500">{test.sub_name}</span>}
+                                                    </td>
+                                                    <td className="px-2 py-2 font-mono font-bold text-slate-900 text-xs text-right">₹{parseFloat(test.amount).toFixed(2)}</td>
                                                 </tr>
                                             ))}
+                                            <tr className="bg-slate-50">
+                                                <td className="px-2 py-2 text-xs font-black text-slate-900 uppercase tracking-widest text-right">Total Amount</td>
+                                                <td className="px-2 py-2 font-mono font-black text-emerald-600 text-sm text-right">
+                                                    ₹{printCharge.tests.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0).toFixed(2)}
+                                                </td>
+                                            </tr>
                                         </tbody>
                                     </table>
-                                </div>
-                            ))}
-                        </div>
+                                ) : (
+                                    (printCharge.tests || [printCharge]).map((testItem, testIdx) => (
+                                        <div key={testIdx} className="break-inside-avoid">
+                                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest border-b border-slate-200 pb-1 mb-2 mt-4">
+                                                {testItem.test_name} Analysis
+                                                {testItem.sub_name && <span className="block text-[10px] font-bold text-slate-500 mt-0.5">{testItem.sub_name}</span>}
+                                            </h3>
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="border-b border-slate-200">
+                                                        <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Parameter Name</th>
+                                                        <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Result Value</th>
+                                                        <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Unit</th>
+                                                        <th className="px-2 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4 text-right">Normal Range</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {(Array.isArray(testItem.results)
+                                                        ? testItem.results
+                                                        : Object.entries(testItem.results || {}).map(([key, val]) => ({ name: key, ...val }))
+                                                    ).map((val, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="px-2 py-1.5 font-bold text-slate-700 text-xs">{val.name}</td>
+                                                            <td className="px-2 py-1.5 font-black text-slate-900 text-xs">{val.value}</td>
+                                                            <td className="px-2 py-1.5 font-bold text-slate-500 text-[10px]">{val.unit}</td>
+                                                            <td className="px-2 py-1.5 font-bold text-slate-500 text-[10px] text-right whitespace-pre-wrap">{val.normal}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
 
-                        {/* Footer */}
-                        <div className="flex justify-between items-end mt-auto pt-4 border-t border-slate-200">
-                            <div className="text-[10px] font-medium text-slate-400">
-                                <p>Generated by REVIVE Hospital Management System</p>
-                                <p>{new Date().toLocaleString()}</p>
-                            </div>
-                            <div className="text-center">
-                                <div className="h-8 w-24 mb-1 mx-auto"></div>
-                                <p className="text-xs font-bold text-slate-900">{printCharge.technician_name}</p>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lab Technician</p>
+                            {/* Footer */}
+                            <div className="flex justify-between items-end mt-auto pt-4 border-t border-slate-200">
+                                <div className="text-[10px] font-medium text-slate-400">
+                                    <p>Generated by REVIVE Hospital Management System</p>
+                                    <p>{new Date().toLocaleString()}</p>
+                                </div>
+                                <div className="text-center">
+                                    <div className="h-8 w-24 mb-1 mx-auto"></div>
+                                    <p className="text-xs font-bold text-slate-900">{printCharge.technician_name}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lab Technician</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </>,
-                document.body
-            )}
+                    </>,
+                    document.body
+                )
+            }
 
             < AnimatePresence >
                 {

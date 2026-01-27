@@ -179,7 +179,7 @@ const HistoryModal = ({ history, onClose }) => {
 const Doctor = () => {
     const { user } = useAuth();
     const { showToast } = useToast();
-    const { globalSearch } = useSearch();
+    const { globalSearch, setGlobalSearch } = useSearch();
 
     // Data States
     const [visitsData, setVisitsData] = useState({ results: [], count: 0 });
@@ -488,7 +488,18 @@ const Doctor = () => {
                 <div className="col-span-3 bg-white rounded-[24px] border border-slate-100 shadow-sm flex flex-col overflow-hidden">
                     <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                         <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Waiting Room</h3>
-                        <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-xs font-bold">{visitsData.count || 0}</span>
+                        <div className="flex items-center gap-2">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1.5 text-slate-400" size={14} />
+                                <input
+                                    className="pl-8 pr-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold outline-none focus:border-blue-500 w-32 focus:w-48 transition-all"
+                                    placeholder="Search..."
+                                    value={globalSearch}
+                                    onChange={(e) => setGlobalSearch(e.target.value)}
+                                />
+                            </div>
+                            <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-xs font-bold">{visitsData.count || 0}</span>
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -519,15 +530,27 @@ const Doctor = () => {
                                                     {v.patient_name ? v.patient_name[0] : 'U'}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className={`text-sm font-bold truncate ${isActive ? 'text-blue-900' : 'text-slate-900'}`}>
-                                                        {v.patient_name}
-                                                    </p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className={`text-sm font-bold truncate ${isActive ? 'text-blue-900' : 'text-slate-900'}`}>
+                                                            {v.patient_name}
+                                                        </p>
+                                                        {v.assigned_role === 'LAB' && (
+                                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-600 border border-purple-200">
+                                                                IN LAB
+                                                            </span>
+                                                        )}
+                                                        {v.lab_results && v.lab_results.length > 0 && (
+                                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-600 border border-green-200">
+                                                                RESULTS
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-xs text-slate-400 font-medium truncate">
                                                         Wait: 12 mins
                                                     </p>
                                                 </div>
-                                                <ChevronRight size={16} className={`transition-opacity ${isActive ? 'opacity-100 text-blue-500' : 'opacity-0 group-hover:opacity-50 text-slate-300'}`} />
                                             </div>
+                                            <ChevronRight size={16} className={`transition-opacity ${isActive ? 'opacity-100 text-blue-500' : 'opacity-0 group-hover:opacity-50 text-slate-300'}`} />
                                         </div>
                                     );
                                 })}
@@ -1044,7 +1067,7 @@ const Doctor = () => {
                     <HistoryModal history={viewingHistory} onClose={() => setViewingHistory(null)} />
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 };
 

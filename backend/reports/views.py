@@ -109,6 +109,9 @@ class FinancialReportView(BaseReportView):
             payment_status='PAID'
         ).select_related('visit__patient')
         
+        print(f"DEBUG: FinancialReport {start_date} to {end_date}", flush=True)
+        print(f"DEBUG: Invoices found: {invoices.count()}", flush=True)
+        
         # Independent Pharmacy Sales (not linked to visit, or visit not yet closed)
         # To avoid double counting, we only take sales where visit is null 
         # (Assuming visit-linked pharmacy items are in the main Invoice)
@@ -121,6 +124,8 @@ class FinancialReportView(BaseReportView):
         billing_gross = invoices.aggregate(total=Sum('total_amount'))['total'] or 0
         billing_refunds = invoices.aggregate(total=Sum('refund_amount'))['total'] or 0
         billing_revenue = float(billing_gross) - float(billing_refunds)
+        
+        print(f"DEBUG: Billing Revenue: {billing_revenue}", flush=True)
 
         pharmacy_gross = pharmacy_sales.aggregate(total=Sum('total_amount'))['total'] or 0
         
@@ -132,9 +137,9 @@ class FinancialReportView(BaseReportView):
 
         pharmacy_revenue = float(pharmacy_gross) - float(pharmacy_refunds)
         total_revenue = billing_revenue + pharmacy_revenue
+        
+        print(f"DEBUG: Total Revenue: {total_revenue}", flush=True)
 
-        # 2. EXPENSES (COGS)
-        # 2. EXPENSES (COGS)
         # 2. EXPENSES (COGS)
         # Pharmacy: Hybrid Approach
         # A. Valid Invoices (Total > 0)

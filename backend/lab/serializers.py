@@ -44,7 +44,7 @@ class LabTestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LabTest
-        fields = ['id', 'name', 'category', 'price', 'normal_range', 'parameters', 'required_items']
+        fields = ['id', 'name', 'sub_name', 'category', 'price', 'normal_range', 'parameters', 'required_items']
 
     def create(self, validated_data):
         parameters_data = validated_data.pop('parameters', [])
@@ -65,6 +65,7 @@ class LabTestSerializer(serializers.ModelSerializer):
         required_items_data = validated_data.pop('required_items', None)
         
         instance.name = validated_data.get('name', instance.name)
+        instance.sub_name = validated_data.get('sub_name', instance.sub_name)
         instance.category = validated_data.get('category', instance.category)
         instance.price = validated_data.get('price', instance.price)
         instance.normal_range = validated_data.get('normal_range', instance.normal_range)
@@ -253,7 +254,7 @@ class LabChargeSerializer(serializers.ModelSerializer):
         model = LabCharge
         fields = [
             'lc_id', 'visit', 'visit_id', 'patient_name', 'registration_number', 'patient_age', 'patient_sex',
-            'test_name', 'amount', 'status', 'results', 'report_date', 'technician_name',
+            'test_name', 'sub_name', 'amount', 'status', 'results', 'report_date', 'technician_name',
             'specimen', 'created_at', 'updated_at'
         ]
         read_only_fields = ['lc_id', 'created_at', 'updated_at']
