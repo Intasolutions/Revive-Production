@@ -16,7 +16,7 @@ class PatientViewSet(viewsets.ModelViewSet):
     permission_classes = [IsHospitalStaff]
 
     filter_backends = [filters.SearchFilter]
-    search_fields = ['full_name', 'phone']
+    search_fields = ['full_name', 'phone', 'registration_number']
 
     def get_queryset(self):
         qs = Patient.objects.all().order_by('-created_at')
