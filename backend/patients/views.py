@@ -75,7 +75,7 @@ class VisitViewSet(viewsets.ModelViewSet):
         'doctor': ['exact'],
         'assigned_role': ['exact', 'in']
     }
-    search_fields = ['patient__full_name', 'patient__phone']
+    search_fields = ['patient__full_name', 'patient__phone', 'patient__registration_number']
     ordering_fields = ['created_at', 'updated_at']
 
     @action(detail=False, methods=['get'])
