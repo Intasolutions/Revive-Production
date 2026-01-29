@@ -56,20 +56,10 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
         
         # Calculate total_amount if items are present
         total_amount = 0
-        for item in items_data:
-            rate = float(item.get('purchase_rate', 0))
-            qty = int(item.get('qty', 0))
-            gst_percent = float(item.get('gst_percent', 0))
-            discount_percent = float(item.get('discount_percent', 0))
-            
-            gross = rate * qty
-            discount = gross * (discount_percent / 100.0)
-            taxable = gross - discount
-            
-            gst_amount = taxable * (gst_percent / 100.0)
-            total_amount += (taxable + gst_amount)
+        # for item in items_data: ... (Logic moved to model)
+        # We just skip calc here and let calculate_distribution handle it via model method later
         
-        validated_data['total_amount'] = round(total_amount, 2)
+        validated_data['total_amount'] = 0 # Temporary
         
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
@@ -82,9 +72,13 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
         for item in items_data:
             PurchaseItem.objects.create(purchase=invoice, **item)
 
+        # Calculate Distribution (GST, Disc)
+        invoice.calculate_distribution()
+        invoice.refresh_from_db()
+
         # Conditionally Update Stock
         if invoice.status == 'COMPLETED':
-            self._process_stock_for_invoice(invoice, items_data)
+            self._process_stock_for_invoice(invoice)
 
         return invoice
 
@@ -104,18 +98,10 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                  total_amount = 0
                  for item in items_data:
                     PurchaseItem.objects.create(purchase=instance, **item)
-                    # Recalc logic copy-paste or abstract (Recalculating simpler inline here for now)
-                    rate = float(item.get('purchase_rate', 0))
-                    qty = int(item.get('qty', 0))
-                    gst_percent = float(item.get('gst_percent', 0))
-                    discount_percent = float(item.get('discount_percent', 0))
-                    gross = rate * qty
-                    discount = gross * (discount_percent / 100.0)
-                    taxable = gross - discount
-                    gst_amount = taxable * (gst_percent / 100.0)
-                    total_amount += (taxable + gst_amount)
                  
-                 instance.total_amount = round(total_amount, 2)
+                 # Recalculate everything
+                 instance.calculate_distribution()
+                 instance.refresh_from_db()
 
         instance.save()
 
@@ -126,48 +112,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
              # But items_data is expected to be passed if editing. 
              # If finalizing without editing items, we need to fetch them.
              
-             final_items_data = []
-             if items_data:
-                 final_items_data = items_data # Already dicts if passed
-             else:
-                 # Serialize existing items back to dicts if needed, or better, query DB
-                 # Optimization: process_stock usually takes dicts. Let's adapt it to take ORM objects or uniform.
-                 # For simplicity, we'll reconstruct data needed for _process_stock_for_invoice from ORM
-                 for db_item in instance.items.all():
-                     final_items_data.append({
-                         'product_name': db_item.product_name,
-                         'batch_no': db_item.batch_no,
-                         'expiry_date': db_item.expiry_date,
-                         'qty': 0, # IMPORTANT: existing db_item has 'qty' in STRIPS? Yes.
-                         # Wait, DB stores Strips. The function expects stripped qty.
-                         # Let's map 1:1
-                         'qty': db_item.qty, 
-                         'free_qty': db_item.free_qty,
-                         'tablets_per_strip': db_item.tablets_per_strip,
-                         'purchase_rate': db_item.purchase_rate,
-                         'mrp': db_item.mrp,
-                         'hsn': db_item.hsn,
-                         'gst_percent': db_item.gst_percent,
-                         'manufacturer': db_item.manufacturer,
-                         'barcode': db_item.barcode
-                     })
-
-             # Check strict flag to avoid double-processing if update called multiple times on COMPLETED
-             # (See validation or check if stock was already added? Complicated. Status check is our guard.)
-             # We assume ONLY DRAFT -> COMPLETED triggers this. 
-             # Ideally we should check 'if previous_status == DRAFT and new_status == COMPLETED'
-             # BUT 'instance' is already updated. modifying standard update flow.
-             
-             # To solve correctly: We check if it JUST changed. 
-             # For now, let's assume we proceed if status is COMPLETED.
-             # *Risk*: Double counting if user PUTs 'COMPLETED' on an already 'COMPLETED' invoice.
-             # *Fix*: In frontend we won't allow editing Completed. Backend should guard.
-             # Let's add a guard: "If it WAS already completed, don't re-process stock".
-             # Actually, simpler: IsPharmacyOrAdmin permission trusts the input. 
-             # But let's check validation data vs instance state if possible. 
-             # *Better*: Rely on the fact consistent Stock updates require unique batch/invoice processing? 
-             # No, simple is best: We will create a private method and call it.
-             self._process_stock_for_invoice(instance, final_items_data)
+             self._process_stock_for_invoice(instance)
 
         # Emit Socket
         try:
@@ -181,38 +126,44 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
 
         return instance
 
-    def _process_stock_for_invoice(self, invoice, items_data):
-        for item in items_data:
-            tps = int(item.get('tablets_per_strip', 1))
-            gst_val = float(item.get('gst_percent', 0))
-
-            qty_strips = int(item.get('qty') or 0)
-            free_strips = int(item.get('free_qty') or 0)
-            billed_rate = float(item.get('purchase_rate', 0))
+    def _process_stock_for_invoice(self, invoice):
+        # Iterate over ACTUAL database items which have calculated values
+        for item in invoice.items.all():
+            tps = item.tablets_per_strip
+  
+            qty_strips = item.qty
+            free_strips = item.free_qty
             
+            # TOTAL QTY in Units (Tablets)
             qty_in = (qty_strips + free_strips) * tps
 
+            # Effective Purchase Rate Calculation
+            # We want EFFECTIVE COST PER STRIP
+            # Logic: (Total Net Cost of Line) / (Total Strips including Free)
+            # Net Cost of Line = item.taxable_amount (The value after all discounts)
+            
             if (qty_strips + free_strips) > 0:
-                effective_purch_rate = (billed_rate * qty_strips) / (qty_strips + free_strips)
+                # item.taxable_amount is the Total Taxable Value for this line (after Cash Disc)
+                effective_purch_rate = float(item.taxable_amount) / float(qty_strips + free_strips)
             else:
-                effective_purch_rate = billed_rate
+                effective_purch_rate = float(item.purchase_rate)
 
             stock, created = PharmacyStock.objects.get_or_create(
-                name=item['product_name'],
-                batch_no=item['batch_no'],
+                name=item.product_name,
+                batch_no=item.batch_no,
                 defaults={
-                    'expiry_date': item['expiry_date'],
+                    'expiry_date': item.expiry_date,
                     'supplier': invoice.supplier,
-                    'barcode': item.get('barcode', '') or '',
-                    'mrp': item['mrp'],
-                    'selling_price': item.get('selling_price', item['mrp']),
+                    'barcode': item.barcode or '',
+                    'mrp': item.mrp,
+                    'selling_price': item.mrp, # Default SP = MRP, user can change
                     'purchase_rate': round(effective_purch_rate, 2),
-                    'ptr': billed_rate,
+                    'ptr': item.ptr, # Original PTR
                     'qty_available': qty_in,
                     'tablets_per_strip': tps,
-                    'hsn': item.get('hsn', '') or '',
-                    'gst_percent': gst_val,
-                    'manufacturer': item.get('manufacturer', '') or '',
+                    'hsn': item.hsn,
+                    'gst_percent': item.gst_percent,
+                    'manufacturer': item.manufacturer,
                     'is_deleted': False,
                 }
             )
@@ -220,14 +171,19 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
             if not created:
                 stock.qty_available = stock.qty_available + qty_in
                 stock.tablets_per_strip = tps 
-                if item.get('barcode'): stock.barcode = item['barcode']
-                stock.mrp = item['mrp']
-                stock.selling_price = item.get('selling_price', item['mrp'])
+                if item.barcode: stock.barcode = item.barcode
+                stock.mrp = item.mrp
+                # stock.selling_price = item.mrp # Don't overwrite SP if exists? User pref? 
+                # Let's keep existing SP if not created, unless MRP changed drastically? 
+                # Safer to update SP to MRP for new batches or keep logic consistent.
+                # Current logic was overwriting. Let's stick to overwriting to ensure consistency.
+                stock.selling_price = item.mrp 
+                
                 stock.purchase_rate = round(effective_purch_rate, 2)
-                stock.ptr = billed_rate 
-                stock.hsn = item.get('hsn', stock.hsn) or stock.hsn
-                stock.gst_percent = gst_val
-                stock.manufacturer = item.get('manufacturer', stock.manufacturer)
+                stock.ptr = item.ptr
+                stock.hsn = item.hsn or stock.hsn
+                stock.gst_percent = item.gst_percent
+                stock.manufacturer = item.manufacturer or stock.manufacturer
                 stock.is_deleted = False
                 stock.save()
 

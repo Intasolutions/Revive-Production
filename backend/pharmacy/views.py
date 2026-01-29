@@ -189,81 +189,75 @@ class PharmacyBulkUploadView(APIView):
                         discount_percent=disc_val
                     )
 
-                    # Update/Create Stock
-                    # User clarified that both 'Qty' and 'Free' are strips
-                    total_qty_in = (qty + free) * tps
+                    # Stock update moved to outside loop to use calculated distribution logic
+                    pass
+
+                    items_created += 1
+                
+                elif line_type == 'F':
+                    pass
+
+            if invoice:
+                # 1. Calculate Distribution (GST, Discount) using the robust logic
+                invoice.calculate_distribution()
+                invoice.refresh_from_db()
+                
+                # 2. Update Stock using Calculated Values (Taxable Amount etc)
+                # This ensures Bulk Upload yields same Stock Rate as Manual Entry
+                for item in invoice.items.all():
+                    qty_strips = item.qty
+                    free_strips = item.free_qty
+                    tps = item.tablets_per_strip
+                    qty_in = (qty_strips + free_strips) * tps
                     
-                    # Calculate Selling Price
-                    # User confirmed "mrp price is sale price" (Selling at MRP)
-                    calculated_selling_price = mrp
+                    # Effective Purchase Rate calculation (Net Cost per Strip)
+                    if (qty_strips + free_strips) > 0:
+                        effective_purch_rate = float(item.taxable_amount) / float(qty_strips + free_strips)
+                    else:
+                        effective_purch_rate = float(item.purchase_rate)
 
                     stock, created = PharmacyStock.objects.get_or_create(
-                        name=p_name,
-                        batch_no=batch,
-                        expiry_date=exp_date,
-                        supplier=supplier,
+                        name=item.product_name,
+                        batch_no=item.batch_no,
                         defaults={
-                            'barcode': barcode,
-                            'mrp': mrp,
-                            'selling_price': calculated_selling_price,
-                            'purchase_rate': rate,
-                            'qty_available': total_qty_in,
+                            'expiry_date': item.expiry_date,
+                            'supplier': invoice.supplier,
+                            'barcode': item.barcode or '',
+                            'mrp': item.mrp,
+                            'selling_price': item.mrp,
+                            'purchase_rate': round(effective_purch_rate, 2),
+                            'ptr': item.ptr,
+                            'qty_available': qty_in,
                             'tablets_per_strip': tps,
-                            'manufacturer': manufacturer,
-                            'hsn': hsn,
-                            'gst_percent': gst_val
+                            'hsn': item.hsn,
+                            'gst_percent': item.gst_percent,
+                            'manufacturer': item.manufacturer,
+                            'is_deleted': False
                         }
                     )
-                    if not created:
-                        stock.qty_available += total_qty_in
-                        # Update metadata fields if they are better/newer
-                        stock.mrp = mrp
-                        stock.gst_percent = gst_val
-                        stock.selling_price = calculated_selling_price
-                        stock.purchase_rate = rate
-                        stock.tablets_per_strip = tps
-                        if manufacturer: stock.manufacturer = manufacturer
-                        if hsn: stock.hsn = hsn
-                        stock.save()
                     
-                    # --- Notification Cleanup ---
+                    if not created:
+                        stock.qty_available += qty_in
+                        stock.mrp = item.mrp
+                        stock.selling_price = item.mrp
+                        stock.purchase_rate = round(effective_purch_rate, 2)
+                        stock.ptr = item.ptr
+                        stock.tablets_per_strip = tps
+                        stock.gst_percent = item.gst_percent
+                        if item.manufacturer: stock.manufacturer = item.manufacturer
+                        if item.hsn: stock.hsn = item.hsn
+                        if item.barcode: stock.barcode = item.barcode
+                        stock.save()
+
+                    # Notification Cleanup
                     try:
                         if stock.qty_available > stock.reorder_level:
                             from core.models import Notification
-                            # Use Q for cleaner syntax and to avoid keyword repetition errors
                             Notification.objects.filter(
                                 Q(message__icontains=f"Low stock alert: {stock.name}") &
                                 Q(message__icontains=stock.batch_no)
                             ).delete()
                     except: pass
-
-                    items_created += 1
-
-                elif line_type == 'F':
-                    # Parse final amount from footer if needed, or calculate from T lines
-                    # For now, let's just sum T line amounts (Rate * Qty)
-                    pass
-
-            if invoice:
-                # Recalculate total amount from items:
-                # Base = PTR * Qty
-                # Discount = Base * (Disc% / 100)
-                # Taxable = Base - Discount
-                # GST = Taxable * (GST% / 100)
-                # Total = Taxable + GST
-                items = PurchaseItem.objects.filter(purchase=invoice)
-                total_val = 0
-                for item in items:
-                    base_amount = float(item.ptr) * item.qty
-                    discount_amount = base_amount * (float(item.discount_percent) / 100.0)
-                    taxable = base_amount - discount_amount
-                    
-                    gst_amt = taxable * (float(item.gst_percent) / 100.0)
-                    
-                    total_val += (taxable + gst_amt)
-                
-                invoice.total_amount = total_val
-                invoice.save()
 
             return Response({
                 "message": "Bulk upload successful",

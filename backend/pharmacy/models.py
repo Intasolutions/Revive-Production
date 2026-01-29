@@ -43,23 +43,101 @@ class PurchaseInvoice(BaseModel):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
     def calculate_total(self):
-        """Helper to calculate total based on items and extra expenses."""
-        item_total = sum(
-            (item.ptr * item.qty * (1 - (item.discount_percent / 100))) * (1 + (item.gst_percent / 100))
-            for item in self.items.all()
-        )
-        # Apply Extra Expenses
-        final_total = item_total - self.cash_discount + self.courier_charge
-        return round(final_total, 2)
+        """Deprecated: Use calculate_distribution instead for accurate GST/Discount logic."""
+        return self.calculate_distribution()
+
+    def calculate_distribution(self):
+        """
+        DISTRIBUTION LOGIC:
+        1. Calculate Total Taxable Value (Sum of PTR * Qty for all items)
+        2. Distribute Cash Discount PROPORTIONATELY based on Taxable Value
+        3. Calculate GST on the DISCOUNTED Taxable Value (Taxable - AllocatedDiscount)
+        4. Totals = DiscountedTaxable + GST
+        """
+        items = self.items.all()
+        if not items.exists():
+            self.total_amount = 0
+            self.save(update_fields=['total_amount'])
+            return 0
+
+        # Step 1: Calculate Base Taxable (Gross) for each item and Total
+        # Formula: Base = PTR * Qty
+        # NOTE: If we had line-level trade discounts, they would be deducted here first. 
+        # Current system assumes 'discount_percent' on item is TRADE discount.
+        
+        total_taxable_pool = 0
+        item_calcs = []
+
+        for item in items:
+            gross_amount = item.ptr * item.qty
+            # Trade Discount (if any existing logic uses it, standard practice: deduct before cash disc)
+            trade_disc_amt = gross_amount * (item.discount_percent / 100)
+            base_taxable = gross_amount - trade_disc_amt
+            
+            total_taxable_pool += base_taxable
+            item_calcs.append({
+                'item': item,
+                'base_taxable': base_taxable
+            })
+
+        # Step 2 & 3: Distribute Cash Discount & Calculate GST
+        # Cash Discount is global for the invoice
+        remaining_discount = self.cash_discount
+        final_invoice_total = 0
+        
+        # We need to handle the "Courier Charge" separately? No, logically it is added to final.
+        # But if courier charge is taxable, it's separate. Usually courier is an expense added at end.
+        
+        for i, obj in enumerate(item_calcs):
+            item = obj['item']
+            base_taxable = obj['base_taxable']
+
+            # Proportional Discount
+            if total_taxable_pool > 0:
+                if i == len(item_calcs) - 1:
+                    # Last item takes remainder to fix rounding errors
+                    allocated_discount = remaining_discount
+                else:
+                    allocated_discount = (base_taxable / total_taxable_pool) * self.cash_discount
+                    allocated_discount = round(allocated_discount, 2)
+                    remaining_discount -= allocated_discount
+            else:
+                allocated_discount = 0
+
+            # Store allocated discount
+            item.cash_discount_amount = allocated_discount
+            
+            # Discounted Taxable Value
+            # Ensure we don't go negative
+            discounted_taxable = max(base_taxable - allocated_discount, 0)
+            
+            # Store intermediate taxable
+            item.taxable_amount = discounted_taxable
+
+            # Calculate GST on this value
+            gst_amt = discounted_taxable * (item.gst_percent / 100)
+            item.gst_amount = round(gst_amt, 2)
+            
+            # Item Total
+            item.total_amount = discounted_taxable + item.gst_amount
+            
+            # Save Item
+            item.save()
+            
+            final_invoice_total += item.total_amount
+
+        # Final Total = Sum of Items + Courier
+        self.total_amount = round(final_invoice_total + self.courier_charge, 2)
+        self.save(update_fields=['total_amount'])
+        
+        return self.total_amount
 
     def save(self, *args, **kwargs):
         # We can't access self.items.all() on first save (no ID yet)
         # So we only recalculate if ID exists, or rely on view to call save() again after adding items.
-        if self.pk:
-            # Note: This might be expensive if called frequently. 
-            # Ideally views should handle specific updates or use signals.
-            # But for safety, we allow manual recalc.
-            pass
+        # Ideally views should handle specific updates or use signals.
+        # But for safety, we allow manual recalc.
+        # self.calculate_distribution() # Loop risk if save() called inside. Avoid auto-call.
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -126,6 +204,12 @@ class PurchaseItem(BaseModel):
     gst_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tablets_per_strip = models.PositiveIntegerField(default=1)
+
+    # Calculated Fields (Persisted for Accuracy/Returns)
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="(PTR*Qty) - TradeDisc - CashDiscShare")
+    cash_discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Proportional share of invoke cash discount")
+    gst_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     def __str__(self):
         return f"{self.product_name} - {self.batch_no}"

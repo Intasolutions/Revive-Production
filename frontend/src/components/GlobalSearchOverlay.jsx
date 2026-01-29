@@ -107,7 +107,7 @@ const GlobalSearchOverlay = () => {
                                             {p.full_name?.[0]}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-gray-900 truncate">{p.full_name}</p>
+                                            <p className="text-sm font-medium text-gray-900 truncate">{p.full_name} <span className="text-gray-400 text-xs font-normal">({p.registration_number})</span></p>
                                             <p className="text-xs text-gray-500">{p.phone}</p>
                                         </div>
                                         <ExternalLink size={14} className="text-gray-400" />

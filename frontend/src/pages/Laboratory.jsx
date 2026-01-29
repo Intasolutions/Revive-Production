@@ -913,14 +913,22 @@ const Laboratory = () => {
                                                         {group.status === 'PENDING' && (
                                                             <div className="flex gap-1 flex-wrap">
                                                                 {group.items.filter(i => i.status === 'PENDING').map(t => (
-                                                                    <button
-                                                                        key={t.lc_id}
-                                                                        onClick={() => handleOpenResultEntry(t)}
-                                                                        className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded hover:bg-blue-100 transition-all border border-blue-100"
-                                                                        title={`Enter Result for ${t.test_name}`}
-                                                                    >
-                                                                        Result: {t.test_name}
-                                                                    </button>
+                                                                    <React.Fragment key={t.lc_id}>
+                                                                        <button
+                                                                            onClick={() => handleOpenResultEntry(t)}
+                                                                            className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded hover:bg-blue-100 transition-all border border-blue-100"
+                                                                            title={`Enter Result for ${t.test_name}`}
+                                                                        >
+                                                                            Result: {t.test_name}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleUpdateStatus(t.lc_id, 'CANCELLED')}
+                                                                            className="px-2 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded hover:bg-red-100 transition-all border border-red-100"
+                                                                            title={`Cancel ${t.test_name}`}
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </React.Fragment>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -1366,16 +1374,54 @@ const Laboratory = () => {
                                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                             <input
                                                 className="w-full pl-12 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold text-sm focus:border-blue-500 outline-none transition-all"
-                                                placeholder="Search patient..."
+                                                placeholder="Search by Name, Phone or Reg No..."
                                                 value={visitQuery}
-                                                onChange={e => searchVisits(e.target.value)}
+                                                onChange={e => {
+                                                    setVisitQuery(e.target.value);
+                                                    if (e.target.value.length >= 2) {
+                                                        api.get(`reception/patients/?search=${e.target.value}`).then(res => {
+                                                            setVisitSearch(res.data.results || res.data || []);
+                                                        }).catch(console.error);
+                                                    } else {
+                                                        setVisitSearch([]);
+                                                    }
+                                                }}
                                             />
                                             {visitSearch.length > 0 && (
                                                 <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-20 max-h-40 overflow-y-auto">
-                                                    {visitSearch.map(v => (
-                                                        <div key={v.id} onClick={() => { setSelectedVisit(v); setVisitSearch([]); }} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0">
-                                                            <p className="text-sm font-bold text-slate-800">{v.patient_name}</p>
-                                                            <p className="text-xs text-slate-500">Dr. {v.doctor_name}</p>
+                                                    {visitSearch.map(p => (
+                                                        <div
+                                                            key={p.id || p.p_id}
+                                                            onClick={async () => {
+                                                                try {
+                                                                    // Fetch latest visit or create new one
+                                                                    const pId = p.p_id || p.id;
+                                                                    const { data } = await api.get(`/reception/visits/?patient=${pId}&ordering=-created_at&limit=1`);
+                                                                    const latest = (data.results || data || [])[0];
+
+                                                                    if (latest && ['OPEN', 'IN_PROGRESS', 'WAITING'].includes(latest.status)) {
+                                                                        setSelectedVisit(latest);
+                                                                    } else {
+                                                                        // Create new Lab Visit
+                                                                        const res = await api.post('/reception/visits/', {
+                                                                            patient: pId,
+                                                                            assigned_role: 'LAB',
+                                                                            status: 'OPEN'
+                                                                        });
+                                                                        setSelectedVisit(res.data);
+                                                                    }
+                                                                    setVisitSearch([]);
+                                                                    setVisitQuery('');
+                                                                } catch (err) {
+                                                                    console.error(err);
+                                                                    // Fallback: Just select patient info if possible, but we need a visit for backend
+                                                                    alert("Failed to initialize visit for this patient.");
+                                                                }
+                                                            }}
+                                                            className="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0"
+                                                        >
+                                                            <p className="text-sm font-bold text-slate-800">{p.full_name} <span className="text-slate-400 font-medium text-xs">({p.registration_number || 'No Reg'})</span></p>
+                                                            <p className="text-xs text-slate-500">{p.phone} • {p.age}Y/{p.gender}</p>
                                                         </div>
                                                     ))}
                                                 </div>
