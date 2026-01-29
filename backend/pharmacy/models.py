@@ -48,31 +48,40 @@ class PurchaseInvoice(BaseModel):
 
     def calculate_distribution(self):
         """
-        DISTRIBUTION LOGIC:
-        1. Calculate Total Taxable Value (Sum of PTR * Qty for all items)
-        2. Distribute Cash Discount PROPORTIONATELY based on Taxable Value
-        3. Calculate GST on the DISCOUNTED Taxable Value (Taxable - AllocatedDiscount)
-        4. Totals = DiscountedTaxable + GST
+        DISTRIBUTION LOGIC (Refined for Strict 2-Decimal Precision):
+        Uses Decimal with ROUND_HALF_UP to ensure 1.666 -> 1.67
         """
+        from decimal import Decimal, ROUND_HALF_UP
+        
         items = self.items.all()
         if not items.exists():
             self.total_amount = 0
             self.save(update_fields=['total_amount'])
             return 0
 
-        # Step 1: Calculate Base Taxable (Gross) for each item and Total
-        # Formula: Base = PTR * Qty
-        # NOTE: If we had line-level trade discounts, they would be deducted here first. 
-        # Current system assumes 'discount_percent' on item is TRADE discount.
-        
-        total_taxable_pool = 0
+        # Helper for STRICT consistent rounding
+        def d_round(val):
+            if isinstance(val, float): val = str(val)
+            return Decimal(val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        # Step 1: Calculate Base Taxable (Gross) using Decimals
+        total_taxable_pool = Decimal(0)
         item_calcs = []
 
         for item in items:
-            gross_amount = item.ptr * item.qty
-            # Trade Discount (if any existing logic uses it, standard practice: deduct before cash disc)
-            trade_disc_amt = gross_amount * (item.discount_percent / 100)
-            base_taxable = gross_amount - trade_disc_amt
+            # Convert inputs to decimal first
+            ptr = Decimal(str(item.ptr))
+            qty = Decimal(item.qty)
+            
+            gross_amount = ptr * qty
+            
+            # Trade Discount
+            disc_pct = Decimal(str(item.discount_percent))
+            trade_disc_amt = gross_amount * (disc_pct / Decimal(100))
+            
+            # Base Taxable (After Trade Disc) - Keep precision high, round at end of step? 
+            # User wants values of ALL medicines to be rounded. So we round intermediate Taxable.
+            base_taxable = d_round(gross_amount - trade_disc_amt)
             
             total_taxable_pool += base_taxable
             item_calcs.append({
@@ -81,12 +90,10 @@ class PurchaseInvoice(BaseModel):
             })
 
         # Step 2 & 3: Distribute Cash Discount & Calculate GST
-        # Cash Discount is global for the invoice
-        remaining_discount = self.cash_discount
-        final_invoice_total = 0
+        remaining_discount = Decimal(str(self.cash_discount)) # No rounding involved yet, just input
+        final_invoice_total = Decimal(0)
         
-        # We need to handle the "Courier Charge" separately? No, logically it is added to final.
-        # But if courier charge is taxable, it's separate. Usually courier is an expense added at end.
+        courier = Decimal(str(self.courier_charge))
         
         for i, obj in enumerate(item_calcs):
             item = obj['item']
@@ -95,39 +102,45 @@ class PurchaseInvoice(BaseModel):
             # Proportional Discount
             if total_taxable_pool > 0:
                 if i == len(item_calcs) - 1:
-                    # Last item takes remainder to fix rounding errors
+                    # Last item takes remainder to fix exact matching of input discount
                     allocated_discount = remaining_discount
                 else:
-                    allocated_discount = (base_taxable / total_taxable_pool) * self.cash_discount
-                    allocated_discount = round(allocated_discount, 2)
+                    allocated_discount = (base_taxable / total_taxable_pool) * Decimal(str(self.cash_discount))
+                    allocated_discount = d_round(allocated_discount)
                     remaining_discount -= allocated_discount
             else:
-                allocated_discount = 0
+                allocated_discount = Decimal(0)
 
             # Store allocated discount
             item.cash_discount_amount = allocated_discount
             
             # Discounted Taxable Value
-            # Ensure we don't go negative
-            discounted_taxable = max(base_taxable - allocated_discount, 0)
+            discounted_taxable = base_taxable - allocated_discount
+            if discounted_taxable < 0: discounted_taxable = Decimal(0)
             
-            # Store intermediate taxable
-            item.taxable_amount = discounted_taxable
-
+            # Store intermediate taxable (Rounded)
+            item.taxable_amount = discounted_taxable # Already rounded if alloc_disc and base were rounded? 
+            # careful, minus operation preserves precision. Let's ensure taxable persists as 2 decimal.
+            # actually base_taxable is rounded, allocated is rounded. minus is fine.
+            
             # Calculate GST on this value
-            gst_amt = discounted_taxable * (item.gst_percent / 100)
-            item.gst_amount = round(gst_amt, 2)
+            gst_pct = Decimal(str(item.gst_percent))
+            gst_amt = discounted_taxable * (gst_pct / Decimal(100))
+            item.gst_amount = d_round(gst_amt)
             
             # Item Total
             item.total_amount = discounted_taxable + item.gst_amount
             
-            # Save Item
+            # Save Item (DecimalFields will handle storage, but we set values to computed Decimals)
             item.save()
             
             final_invoice_total += item.total_amount
 
-        # Final Total = Sum of Items + Courier
-        self.total_amount = round(final_invoice_total + self.courier_charge, 2)
+        # Final Total
+        # Use simple addition, NOT rounding to whole number.
+        self.total_amount = final_invoice_total + courier
+        # self.total_amount is already 2 decimal due to components.
+        
         self.save(update_fields=['total_amount'])
         
         return self.total_amount

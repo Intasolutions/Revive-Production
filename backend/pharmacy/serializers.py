@@ -127,26 +127,34 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
         return instance
 
     def _process_stock_for_invoice(self, invoice):
+        from decimal import Decimal, ROUND_HALF_UP
+        
+        def d_round(val):
+            if isinstance(val, float): val = str(val)
+            return Decimal(val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
         # Iterate over ACTUAL database items which have calculated values
         for item in invoice.items.all():
             tps = item.tablets_per_strip
   
-            qty_strips = item.qty
-            free_strips = item.free_qty
+            qty_strips = Decimal(item.qty)
+            free_strips = Decimal(item.free_qty)
             
             # TOTAL QTY in Units (Tablets)
             qty_in = (qty_strips + free_strips) * tps
 
             # Effective Purchase Rate Calculation
-            # We want EFFECTIVE COST PER STRIP
             # Logic: (Total Net Cost of Line) / (Total Strips including Free)
-            # Net Cost of Line = item.taxable_amount (The value after all discounts)
+            
+            total_net_cost = Decimal(item.taxable_amount) # Already Decimal from DB ideally
             
             if (qty_strips + free_strips) > 0:
-                # item.taxable_amount is the Total Taxable Value for this line (after Cash Disc)
-                effective_purch_rate = float(item.taxable_amount) / float(qty_strips + free_strips)
+                effective_purch_rate = total_net_cost / (qty_strips + free_strips)
             else:
-                effective_purch_rate = float(item.purchase_rate)
+                effective_purch_rate = Decimal(item.purchase_rate)
+            
+            # Round the rate to 2 decimals as requested "all values rounded"
+            effective_purch_rate = d_round(effective_purch_rate)
 
             stock, created = PharmacyStock.objects.get_or_create(
                 name=item.product_name,
@@ -156,9 +164,9 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                     'supplier': invoice.supplier,
                     'barcode': item.barcode or '',
                     'mrp': item.mrp,
-                    'selling_price': item.mrp, # Default SP = MRP, user can change
-                    'purchase_rate': round(effective_purch_rate, 2),
-                    'ptr': item.ptr, # Original PTR
+                    'selling_price': item.mrp, 
+                    'purchase_rate': effective_purch_rate,
+                    'ptr': item.ptr, 
                     'qty_available': qty_in,
                     'tablets_per_strip': tps,
                     'hsn': item.hsn,

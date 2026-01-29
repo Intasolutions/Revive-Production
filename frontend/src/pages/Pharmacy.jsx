@@ -68,7 +68,7 @@ const ReceiptTemplate = ({ sale }) => (
         <div className="mt-4 pt-2 border-t border-dashed border-slate-300 space-y-1 font-black">
             <div className="flex justify-end gap-8 text-lg">
                 <span>NET TOTAL:</span>
-                <span>₹{Math.round(sale.total_amount)}</span>
+                <span>₹{Number(sale.total_amount).toFixed(2)}</span>
             </div>
         </div>
 
@@ -434,7 +434,7 @@ const Pharmacy = () => {
             setLoading(false);
         }
     };
-    const calculateTotals = () => { const subtotal = cart.reduce((acc, item) => acc + (item.selling_price * item.qty), 0); return { subtotal, net: Math.round(subtotal) }; };
+    const calculateTotals = () => { const subtotal = cart.reduce((acc, item) => acc + (item.selling_price * item.qty), 0); return { subtotal, net: subtotal.toFixed(2) }; };
     useEffect(() => {
         if (cart.length > 0) {
             setCart(prevCart => prevCart.map(item => {
