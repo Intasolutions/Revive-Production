@@ -50,6 +50,12 @@ class PurchaseInvoice(BaseModel):
         """
         DISTRIBUTION LOGIC (Refined for Strict 2-Decimal Precision):
         Uses Decimal with ROUND_HALF_UP to ensure 1.666 -> 1.67
+        
+        Alignment with User Requirement:
+        1. Calculate Taxable After Discount for each item.
+        2. Calculate GST = Taxable * Rate.
+        3. Round GST immediately (d_round).
+        4. Sum(Rounded GST) + Sum(Taxable) = Final Total.
         """
         from decimal import Decimal, ROUND_HALF_UP
         
@@ -106,32 +112,32 @@ class PurchaseInvoice(BaseModel):
                     allocated_discount = remaining_discount
                 else:
                     allocated_discount = (base_taxable / total_taxable_pool) * Decimal(str(self.cash_discount))
-                    allocated_discount = d_round(allocated_discount)
+                    # NO Rounding on allocated discount here (High precision for logic)
                     remaining_discount -= allocated_discount
             else:
                 allocated_discount = Decimal(0)
 
-            # Store allocated discount
-            item.cash_discount_amount = allocated_discount
+            # Store allocated discount (Round for DB storage)
+            item.cash_discount_amount = d_round(allocated_discount)
             
-            # Discounted Taxable Value
-            discounted_taxable = base_taxable - allocated_discount
-            if discounted_taxable < 0: discounted_taxable = Decimal(0)
+            # Discounted Taxable Value (Unrounded - High Precision for GST Calc)
+            unrounded_taxable = base_taxable - allocated_discount
+            if unrounded_taxable < 0: unrounded_taxable = Decimal(0)
             
-            # Store intermediate taxable (Rounded)
-            item.taxable_amount = discounted_taxable # Already rounded if alloc_disc and base were rounded? 
-            # careful, minus operation preserves precision. Let's ensure taxable persists as 2 decimal.
-            # actually base_taxable is rounded, allocated is rounded. minus is fine.
-            
-            # Calculate GST on this value
+            # Calculate GST on UNROUNDED Taxable Value (User Requirement)
             gst_pct = Decimal(str(item.gst_percent))
-            gst_amt = discounted_taxable * (gst_pct / Decimal(100))
-            item.gst_amount = d_round(gst_amt)
+            # gst = unrounded * rate
+            gst_raw = unrounded_taxable * (gst_pct / Decimal(100))
+            # gst = round(gst) (User Requirement)
+            item.gst_amount = d_round(gst_raw)
             
-            # Item Total
-            item.total_amount = discounted_taxable + item.gst_amount
+            # Now Round Taxable for DB Storage
+            item.taxable_amount = d_round(unrounded_taxable)
+
+            # Item Total = Rounded Taxable + Rounded GST
+            item.total_amount = item.taxable_amount + item.gst_amount
             
-            # Save Item (DecimalFields will handle storage, but we set values to computed Decimals)
+            # Save Item
             item.save()
             
             final_invoice_total += item.total_amount
