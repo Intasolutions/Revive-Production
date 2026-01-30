@@ -173,6 +173,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                     'gst_percent': item.gst_percent,
                     'manufacturer': item.manufacturer,
                     'is_deleted': False,
+                    'medicine_type': item.medicine_type,
                 }
             )
 
@@ -193,6 +194,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                 stock.gst_percent = item.gst_percent
                 stock.manufacturer = item.manufacturer or stock.manufacturer
                 stock.is_deleted = False
+                stock.medicine_type = item.medicine_type
                 stock.save()
 
             # --- Notification Cleanup ---

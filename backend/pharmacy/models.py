@@ -176,6 +176,20 @@ class PharmacyStock(BaseModel):
     qty_available = models.PositiveIntegerField(default=0)
     reorder_level = models.PositiveIntegerField(default=10)
     
+    MEDICINE_TYPE_CHOICES = (
+        ('TABLET', 'Tablet'),
+        ('SYRUP', 'Syrup'),
+        ('DROP', 'Drop'),
+        ('INJECTION', 'Injection'),
+        ('GEL', 'Gel'),
+        ('CREAM', 'Cream'),
+        ('OINTMENT', 'Ointment'),
+        ('POWDER', 'Powder'),
+        ('SPRAY', 'Spray'),
+        ('OTHER', 'Other'),
+    )
+    medicine_type = models.CharField(max_length=20, choices=MEDICINE_TYPE_CHOICES, default='TABLET')
+    
     # Track Original Bill Price (PTR) separate from Effective Purchase Rate
     ptr = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)], default=0)
 
@@ -210,6 +224,8 @@ class PurchaseItem(BaseModel):
     barcode = models.CharField(max_length=100, blank=True)
     batch_no = models.CharField(max_length=50)
     expiry_date = models.DateField()
+
+    medicine_type = models.CharField(max_length=20, choices=PharmacyStock.MEDICINE_TYPE_CHOICES, default='TABLET')
 
     qty = models.PositiveIntegerField()
     free_qty = models.PositiveIntegerField(default=0)

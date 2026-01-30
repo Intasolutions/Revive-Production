@@ -144,6 +144,7 @@ const Pharmacy = () => {
         supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [], gst_percent: 0,
         cash_discount: 0, courier_charge: 0 // New Extra Expenses
     });
+    const medicineTypes = ['TABLET', 'SYRUP', 'DROP', 'INJECTION', 'GEL', 'CREAM', 'OINTMENT', 'POWDER', 'SPRAY', 'OTHER'];
     const [scannedBarcode, setScannedBarcode] = useState('');
     const [manualProductSearch, setManualProductSearch] = useState({ rowIdx: null, results: [] });
 
@@ -296,7 +297,8 @@ const Pharmacy = () => {
             batch_no: newItems[rowIdx].batch_no,
             expiry_date: newItems[rowIdx].expiry_date,
             qty: newItems[rowIdx].qty,
-            free_qty: newItems[rowIdx].free_qty
+            free_qty: newItems[rowIdx].free_qty,
+            medicine_type: product.medicine_type || 'TABLET'
         };
         setManualInvoice(prev => ({ ...prev, items: newItems }));
         setManualProductSearch({ rowIdx: null, results: [] });
@@ -322,7 +324,8 @@ const Pharmacy = () => {
                     manufacturer: existing.manufacturer,
                     hsn: existing.hsn,
                     tablets_per_strip: existing.tablets_per_strip || 10,
-                    selling_price_per_tab: (existing.mrp / (existing.tablets_per_strip || 1)).toFixed(2)
+                    selling_price_per_tab: (existing.mrp / (existing.tablets_per_strip || 1)).toFixed(2),
+                    medicine_type: existing.medicine_type || 'TABLET'
                 };
                 setManualInvoice(prev => ({ ...prev, items: [...prev.items, newItem] }));
                 showToast('success', `Found: ${existing.name}`);
@@ -343,7 +346,8 @@ const Pharmacy = () => {
                         manufacturer: '',
                         hsn: '',
                         tablets_per_strip: 10,
-                        selling_price_per_tab: 0
+                        selling_price_per_tab: 0,
+                        medicine_type: 'TABLET'
                     }]
                 }));
                 showToast('info', 'New product. Enter details.');
@@ -357,7 +361,14 @@ const Pharmacy = () => {
 
     const handleManualItemChange = (idx, field, value) => {
         const newItems = [...manualInvoice.items];
+
+        // !CRITICAL: RESTORED MISSING LINE - Fixes typing issue
         newItems[idx][field] = value;
+
+        if (field === 'medicine_type' && value !== 'TABLET') {
+            // Smart Default: If Type is NOT Tablet, TPS usually 1
+            newItems[idx].tablets_per_strip = 1;
+        }
 
         // Live search if typing in product name
         if (field === 'product_name') {
@@ -409,7 +420,8 @@ const Pharmacy = () => {
                         purchase_rate: parseFloat((parseFloat(item.purchase_rate) || 0).toFixed(2)),
                         ptr: parseFloat((parseFloat(item.purchase_rate) || 0).toFixed(2)),
                         mrp: parseFloat((parseFloat(item.mrp) || 0).toFixed(2)), // Keep as Strip MRP
-                        selling_price: parseFloat((manualTabPrice * tps).toFixed(2)) // Convert Manual Tab Price -> Strip Price for backend
+                        selling_price: parseFloat((manualTabPrice * tps).toFixed(2)), // Convert Manual Tab Price -> Strip Price for backend
+                        medicine_type: item.medicine_type || 'TABLET'
                     };
                 })
             };
@@ -526,6 +538,17 @@ const Pharmacy = () => {
     const handleConfirmUpload = async () => { if (!fileToUpload || !selectedSupplier) return; const formData = new FormData(); formData.append('file', fileToUpload); formData.append('supplier_name', selectedSupplier); setUploadLoading(true); try { const { data } = await api.post('pharmacy/bulk-upload/', formData, { headers: { 'Content-Type': 'multipart/form-data' } }); setUploadResult({ success: true, message: 'Upload Successful', details: `${data.items_processed} items processed.`, invoice: data.invoice_no }); showToast('success', 'Inventory updated'); if (activeTab === 'purchases') fetchRecentImports(); setFileToUpload(null); } catch (err) { showToast('error', 'Upload failed.'); setUploadResult({ success: false, message: 'Upload Failed', details: err.response?.data?.error || "Error uploading file." }); } finally { setUploadLoading(false); } };
     const handleSyncToTablets = async (item) => { if (!window.confirm(`This will multiply current stock (${item.qty_available}) by ${item.tablets_per_strip} to convert existing strip counts to tablets. Continue?`)) return; try { const newQty = item.qty_available * item.tablets_per_strip; await api.patch(`pharmacy/stock/${item.med_id || item.id}/`, { qty_available: newQty }); showToast('success', 'Stock corrected to tablets'); fetchStock(); setSelectedStockItem(null); } catch (err) { showToast('error', 'Update failed'); } };
     const handleAddSupplier = async (e) => { e.preventDefault(); try { await api.post('pharmacy/suppliers/', { supplier_name: newSupplierName }); fetchSuppliers(); setShowAddSupplierModal(false); setNewSupplierName(''); showToast('success', 'Supplier added'); } catch (err) { showToast('error', 'Failed to add supplier'); } };
+
+    // Update Stock Type
+    const updateStockType = async (item, newType) => {
+        try {
+            await api.patch(`pharmacy/stock/${item.med_id || item.id}/`, { medicine_type: newType });
+            showToast('success', 'Type updated');
+            fetchStock(false); // Silent refresh
+        } catch (err) {
+            showToast('error', 'Failed to update type');
+        }
+    };
 
     // Update Invoice Extras (Cash Discount, Courier)
     const updateInvoiceExtras = async (field, value) => {
@@ -663,11 +686,23 @@ const Pharmacy = () => {
                     <>
                         <div className="flex-1 overflow-auto">
                             <table className="w-full text-left border-collapse">
-                                <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm"><tr>{['Drug Name', 'Batch', 'Expiry', 'Total (Tab)', 'P.Rate', 'Sales Price/Tab', 'MRP', 'Action'].map(h => <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}</tr></thead>
+                                <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm"><tr>{['Drug Name', 'Type', 'Batch', 'Expiry', 'Total (Tab)', 'P.Rate', 'Sales Price/Tab', 'MRP', 'Action'].map(h => <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}</tr></thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {(stockData?.results || []).map(s => (
                                         <tr key={s.med_id} className="hover:bg-slate-50 transition-colors group">
                                             <td className="px-6 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold"><Pill size={14} /></div><div><p className="font-bold text-slate-900 text-sm">{s.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{s.manufacturer || 'Generic'}</p></div></div></td>
+                                            <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
+                                                <div className="relative group/edit w-24">
+                                                    <select
+                                                        className="w-full appearance-none bg-blue-50 text-blue-700 font-bold text-[10px] uppercase rounded-lg px-2 py-1 pr-4 outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer border border-transparent hover:border-blue-200"
+                                                        value={s.medicine_type || 'TABLET'}
+                                                        onChange={(e) => updateStockType(s, e.target.value)}
+                                                    >
+                                                        {medicineTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                                    </select>
+                                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-blue-400"><Edit3 size={10} /></div>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-3 font-mono text-xs font-bold text-slate-600">{s.batch_no}</td>
                                             <td className="px-6 py-3 font-mono text-xs font-bold text-slate-600">{new Date(s.expiry_date).toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}</td>
                                             <td className="px-6 py-3">
@@ -1334,7 +1369,8 @@ const Pharmacy = () => {
                                         <table className="w-full text-left">
                                             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                                                 <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    <th className="px-4 py-4 w-[20%]">Product Details</th>
+                                                    <th className="px-4 py-4 w-[15%]">Product Details</th>
+                                                    <th className="px-4 py-4 w-[8%]">Type</th>
                                                     <th className="px-4 py-4 w-[10%]">Batch Info</th>
                                                     <th className="px-4 py-4 w-[5%] text-center">TPS</th>
                                                     <th className="px-4 py-4 w-[8%] text-center">Qty (Str)</th>
@@ -1394,6 +1430,17 @@ const Pharmacy = () => {
                                                                         </div>
                                                                     </div>
                                                                 )}
+                                                            </td>
+
+                                                            {/* Type */}
+                                                            <td className="px-4 py-3 align-top">
+                                                                <select
+                                                                    className="w-full bg-slate-50 text-[10px] font-bold text-slate-700 rounded px-1 py-1 outline-none uppercase"
+                                                                    value={item.medicine_type || 'TABLET'}
+                                                                    onChange={(e) => handleManualItemChange(idx, 'medicine_type', e.target.value)}
+                                                                >
+                                                                    {medicineTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                                                </select>
                                                             </td>
 
                                                             {/* Batch & Expiry */}
@@ -1476,7 +1523,7 @@ const Pharmacy = () => {
                                         {/* Empty State / Add Button Area */}
                                         <div className="p-4 bg-slate-50 border-t border-slate-200">
                                             <button
-                                                onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, gst_percent: 0, discount_percent: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0 }] }))}
+                                                onClick={() => setManualInvoice(prev => ({ ...prev, items: [...prev.items, { product_name: '', barcode: '', batch_no: '', expiry_date: '', qty: 1, free_qty: 0, purchase_rate: 0, gst_percent: 0, discount_percent: 0, ptr: 0, mrp: 0, manufacturer: '', hsn: '', tablets_per_strip: 10, selling_price_per_tab: 0, medicine_type: 'TABLET' }] }))}
                                                 className="w-full h-12 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-widest hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-all group"
                                             >
                                                 <Plus size={16} className="group-hover:scale-110 transition-transform" />
