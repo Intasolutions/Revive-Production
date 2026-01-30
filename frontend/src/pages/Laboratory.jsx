@@ -933,10 +933,28 @@ const Laboratory = () => {
                                                             </div>
                                                         )}
 
+                                                        {/* Edit Action for Completed Items */}
+                                                        {group.status === 'COMPLETED' && (
+                                                            <div className="flex gap-1 flex-wrap mb-2">
+                                                                {group.items.map(t => (
+                                                                    <button
+                                                                        key={t.lc_id}
+                                                                        onClick={() => handleOpenResultEntry(t)}
+                                                                        className="px-2 py-1 bg-purple-50 text-purple-600 text-[10px] font-bold rounded hover:bg-purple-100 transition-all border border-purple-100 flex items-center gap-1"
+                                                                        title={`Edit Result for ${t.test_name}`}
+                                                                    >
+                                                                        <Pencil size={10} />
+                                                                        Edit: {t.test_name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
                                                         {/* Consolidated Print Action */}
                                                         <button onClick={() => handleOpenPrintModal(group)} className="flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-700 shadow-md transition-all">
                                                             <Printer size={14} />
                                                             {group.status === 'PENDING' ? 'Print Receipt' : 'Print Report'}
+
                                                         </button>
                                                     </div>
                                                 </td>

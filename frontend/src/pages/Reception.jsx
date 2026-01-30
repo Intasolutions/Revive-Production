@@ -61,6 +61,7 @@ const Reception = () => {
     const { globalSearch } = useSearch();
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
     const [activeTab, setActiveTab] = useState('front-desk'); // 'front-desk' | 'billing'
     const [editingPatientId, setEditingPatientId] = useState(null);
 
@@ -110,7 +111,7 @@ const Reception = () => {
     useEffect(() => {
         fetchPatients(true);
         fetchStats();
-    }, [page, globalSearch]);
+    }, [page, globalSearch, pageSize]);
 
     // Add 4-second automatic refresh
     useEffect(() => {
@@ -120,7 +121,7 @@ const Reception = () => {
         }, 4000);
 
         return () => clearInterval(interval);
-    }, [page, globalSearch]);
+    }, [page, globalSearch, pageSize]);
 
     useEffect(() => {
         fetchStats();
@@ -140,7 +141,7 @@ const Reception = () => {
     const fetchPatients = async (showSkeleton = true) => {
         if (showSkeleton) setLoading(true);
         try {
-            const { data } = await api.get(`/reception/patients/?page=${page}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
+            const { data } = await api.get(`/reception/patients/?page=${page}&page_size=${pageSize}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
             setPatientsData(data);
         } catch (err) {
             console.error(err);
@@ -574,13 +575,34 @@ const Reception = () => {
                                             </tbody>
                                         </table>
                                     </div>
-                                    <div className="p-6 border-t border-slate-100 bg-slate-50/50">
-                                        <Pagination
-                                            current={page}
-                                            total={totalPages}
-                                            onPageChange={setPage}
-                                            loading={loading}
-                                        />
+                                    <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
+
+                                        {/* Pagination Size Selector */}
+                                        <div className="flex items-center gap-2 text-sm text-slate-500 font-bold bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                                            <span>Rows per page:</span>
+                                            <select
+                                                value={pageSize}
+                                                onChange={(e) => {
+                                                    setPageSize(Number(e.target.value));
+                                                    setPage(1); // Reset to page 1 on size change
+                                                }}
+                                                className="bg-transparent outline-none text-slate-900 cursor-pointer"
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={20}>20</option>
+                                                <option value={50}>50</option>
+                                                <option value={100}>100</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="flex-1 w-full md:w-auto">
+                                            <Pagination
+                                                current={page}
+                                                total={Math.ceil((patientsData.count || 0) / pageSize)}
+                                                onPageChange={setPage}
+                                                loading={loading}
+                                            />
+                                        </div>
                                     </div>
                                 </>
                             )}

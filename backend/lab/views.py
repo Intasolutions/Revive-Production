@@ -164,10 +164,15 @@ class LabChargeViewSet(viewsets.ModelViewSet):
     filterset_fields = ['visit', 'status']
 
     def perform_update(self, serializer):
+        # Capture old status from the instance before it is updated
+        old_status = serializer.instance.status
+        
+        # Save the update
         instance = serializer.save()
         
-        # Trigger Billing & Inventory if status matches COMPLETED
-        if instance.status == 'COMPLETED':
+        # Trigger Billing & Inventory ONLY if status CHANGED to COMPLETED
+        # This prevents double-deduction/billing when treating/editing an already completed test
+        if instance.status == 'COMPLETED' and old_status != 'COMPLETED':
             # --- INVENTORY DEDUCTION LOGIC ---
             try:
                 # Check if specific consumption data was sent (Wastage Handling)
