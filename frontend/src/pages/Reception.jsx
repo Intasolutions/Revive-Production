@@ -141,7 +141,17 @@ const Reception = () => {
     const fetchPatients = async (showSkeleton = true) => {
         if (showSkeleton) setLoading(true);
         try {
-            const { data } = await api.get(`/reception/patients/?page=${page}&page_size=${pageSize}${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`);
+            let url = `/reception/patients/?page=${page}`;
+
+            if (pageSize === 'all') {
+                url += `&page_size=10000`;
+            } else {
+                url += `&page_size=${pageSize}`;
+            }
+
+            url += `${globalSearch ? `&search=${encodeURIComponent(globalSearch)}` : ''}`;
+
+            const { data } = await api.get(url);
             setPatientsData(data);
         } catch (err) {
             console.error(err);
@@ -583,7 +593,7 @@ const Reception = () => {
                                             <select
                                                 value={pageSize}
                                                 onChange={(e) => {
-                                                    setPageSize(Number(e.target.value));
+                                                    setPageSize(e.target.value === 'all' ? 'all' : Number(e.target.value));
                                                     setPage(1); // Reset to page 1 on size change
                                                 }}
                                                 className="bg-transparent outline-none text-slate-900 cursor-pointer"
@@ -592,15 +602,17 @@ const Reception = () => {
                                                 <option value={20}>20</option>
                                                 <option value={50}>50</option>
                                                 <option value={100}>100</option>
+                                                <option value="all">View All</option>
                                             </select>
                                         </div>
 
                                         <div className="flex-1 w-full md:w-auto">
                                             <Pagination
                                                 current={page}
-                                                total={Math.ceil((patientsData.count || 0) / pageSize)}
+                                                total={Math.ceil((patientsData.count || 0) / (pageSize === 'all' ? (patientsData.count || 1) : pageSize))}
                                                 onPageChange={setPage}
                                                 loading={loading}
+                                                compact
                                             />
                                         </div>
                                     </div>

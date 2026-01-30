@@ -159,7 +159,11 @@ const Pharmacy = () => {
         if (showLoading) setLoading(true);
         try {
             let url = `pharmacy/stock/?page=${page}`;
-            if (rowsPerPage !== 'all') url += `&page_size=${rowsPerPage}`;
+            if (rowsPerPage === 'all') {
+                url += `&page_size=10000`;
+            } else {
+                url += `&page_size=${rowsPerPage}`;
+            }
             if (filterSupplier) url += `&supplier=${filterSupplier}`;
             if (inventorySearch) url += `&search=${inventorySearch}`; // Add search param
             const { data } = await api.get(url);
@@ -737,9 +741,9 @@ const Pharmacy = () => {
                                 </tbody>
                             </table>
                         </div>
-                        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
-                            <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-500">Rows:</span><select className="bg-white border border-slate-200 text-slate-700 text-xs rounded-lg p-1 outline-none font-bold" value={rowsPerPage} onChange={(e) => { setRowsPerPage(e.target.value); setPage(1); }}><option value={10}>10</option><option value={50}>50</option><option value="all">All</option></select></div>
-                            <Pagination current={page} total={Math.ceil(stockData.count / (rowsPerPage === 'all' ? stockData.count || 1 : rowsPerPage))} onPageChange={setPage} loading={loading} compact />
+                        <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
+                            <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-500">Rows per page:</span><select className="bg-white border border-slate-200 text-slate-700 text-xs rounded-lg p-1 outline-none font-bold" value={rowsPerPage} onChange={(e) => { setRowsPerPage(e.target.value === 'all' ? 'all' : Number(e.target.value)); setPage(1); }}><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option><option value="all">View All</option></select></div>
+                            <Pagination current={page} total={Math.ceil(stockData.count / (rowsPerPage === 'all' ? (stockData.count || 1) : rowsPerPage))} onPageChange={setPage} loading={loading} compact />
                         </div>
                     </>
                 )}

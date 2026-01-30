@@ -99,58 +99,58 @@ class Command(BaseCommand):
                         )
         self.stdout.write(f'- {len(tests_data)} Tests Verified')
 
-        # 5. Patients & Visits
-        patients_data = [
-            {'name': 'John Doe', 'age': 45, 'gender': 'M', 'phone': '9999999991'},
-            {'name': 'Jane Smith', 'age': 32, 'gender': 'F', 'phone': '9999999992'},
-            {'name': 'Alice Johnson', 'age': 28, 'gender': 'F', 'phone': '9999999993'},
-            {'name': 'Bob Brown', 'age': 55, 'gender': 'M', 'phone': '9999999994'},
-        ]
-
-        visits = []
-        for p in patients_data:
+        # 5. Bulk Generate 150 Random Lab Requests
+        self.stdout.write(f'Generating 150 Random Lab Requests...')
+        
+        first_names = ['James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Joseph', 'Thomas', 'Charles', 'Mary', 'Patricia', 'Jennifer', 'Linda', 'Elizabeth', 'Barbara', 'Susan', 'Jessica', 'Sarah', 'Karen']
+        last_names = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez']
+        
+        statuses = ['PENDING', 'COMPLETED', 'CANCELLED']
+        
+        for i in range(150):
+            f_name = random.choice(first_names)
+            l_name = random.choice(last_names)
+            full_name = f"{f_name} {l_name} Lab-{i+1}"
+            
             pat, _ = Patient.objects.get_or_create(
-                phone=p['phone'],
-                defaults={'full_name': p['name'], 'age': p['age'], 'gender': p['gender'], 'address': 'Local City'}
+                phone=f"8{random.randint(100000000, 999999999)}",
+                defaults={
+                    'full_name': full_name, 
+                    'age': random.randint(10, 80), 
+                    'gender': random.choice(['M', 'F']), 
+                    'address': 'Test City'
+                }
             )
             
-            # Create OPEN Visit assigned to LAB
             visit = Visit.objects.create(
                 patient=pat,
                 assigned_role='LAB',
                 status='OPEN'
             )
-            visits.append(visit)
-        
-        self.stdout.write(f'- {len(visits)} Visits Created for Testing')
+            
+            # Add 1-3 tests per visit
+            num_tests = random.randint(1, 3)
+            current_tests = random.sample(tests_data, num_tests)
+            
+            status_choice = random.choices(statuses, weights=[60, 30, 10], k=1)[0]
+            
+            for t in current_tests:
+                charge = LabCharge.objects.create(
+                    visit=visit, 
+                    test_name=t['name'], 
+                    amount=t['price'], 
+                    status=status_choice
+                )
+                
+                if status_choice == 'COMPLETED':
+                    charge.technician_name = 'Auto Bot'
+                    if 'SUGAR' in t['name']:
+                         charge.results=[{'name': 'Glucose', 'value': str(random.randint(70, 140)), 'unit': 'mg/dL', 'normal': '70-110'}]
+                    elif 'LIPID' in t['name']:
+                         charge.results=[{'name': 'Cholesterol', 'value': str(random.randint(150, 250)), 'unit': 'mg/dL', 'normal': '< 200'}]
+                    else:
+                         charge.results=[{'name': 'Result', 'value': 'Normal', 'unit': '-', 'normal': '-'}]
+                    charge.report_date = timezone.now()
+                    charge.save()
 
-        # 6. Lab Charges (Requests)
-        
-        # Visit 0: Pending Tests
-        LabCharge.objects.create(visit=visits[0], test_name='CBC', amount=350, status='PENDING')
-        LabCharge.objects.create(visit=visits[0], test_name='BLOOD SUGAR', amount=80, status='PENDING')
-
-        # Visit 1: Completed Test
-        lc = LabCharge.objects.create(
-            visit=visits[1], test_name='LIPID PROFILE', amount=650, status='COMPLETED',
-            technician_name='System Admin',
-            results=[
-                {'name': 'Cholesterol', 'value': '180', 'unit': 'mg/dL', 'normal': '< 200'},
-                {'name': 'Triglycerides', 'value': '140', 'unit': 'mg/dL', 'normal': '< 150'}
-            ],
-            report_date=timezone.now()
-        )
-        # Note: Inventory should be deducted via views logic usually, but manual here is fine for dummy data or we let it fly.
-        
-        # Visit 2: Pending
-        LabCharge.objects.create(visit=visits[2], test_name='HIV SCREENING', amount=400, status='PENDING')
-
-        # Visit 3: Completed
-        LabCharge.objects.create(
-            visit=visits[3], test_name='BLOOD SUGAR', amount=80, status='COMPLETED',
-            technician_name='System Admin',
-            results=[{'name': 'Fasting Glucose', 'value': '95', 'unit': 'mg/dL', 'normal': '70-110'}],
-            report_date=timezone.now()
-        )
-
-        self.stdout.write(self.style.SUCCESS('Successfully populated dummy lab data!'))
+        self.stdout.write(self.style.SUCCESS('Successfully populated dummy lab data with 150 records!'))

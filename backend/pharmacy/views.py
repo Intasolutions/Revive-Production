@@ -25,6 +25,14 @@ class IsPharmacyOrAdmin(permissions.BasePermission):
         return request.user.is_superuser or getattr(request.user, "role", None) in ["PHARMACY", "ADMIN", "DOCTOR", "RECEPTION"]
 
 
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 10000
+
+
 class PharmacyBulkUploadView(APIView):
     permission_classes = [IsPharmacyOrAdmin]
     parser_classes = [MultiPartParser]
@@ -285,6 +293,7 @@ class PharmacyStockViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'barcode', 'batch_no']
     ordering_fields = ['expiry_date', 'qty_available', 'updated_at', 'supplier__supplier_name']
     ordering = ['expiry_date']
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         qs = PharmacyStock.objects.filter(is_deleted=False)

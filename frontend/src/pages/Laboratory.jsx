@@ -57,6 +57,7 @@ const Laboratory = () => {
     const [activeTab, setActiveTab] = useState('queue'); // queue | inventory
     const [statusFilter, setStatusFilter] = useState('PENDING');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
     const [labTests, setLabTests] = useState([]);
 
     // Group charges by visit AND distinct request times (Session-based grouping)
@@ -223,7 +224,7 @@ const Laboratory = () => {
         } else {
             fetchInventory();
         }
-    }, [activeTab, page, globalSearch, statusFilter]);
+    }, [activeTab, page, globalSearch, statusFilter, pageSize]);
 
     useEffect(() => {
         if (selectedVisit) {
@@ -286,7 +287,15 @@ const Laboratory = () => {
         if (showLoading) setLoading(true);
         try {
             const statusQuery = statusFilter !== 'ALL' ? `&status=${statusFilter}` : '';
-            const { data } = await api.get(`lab/charges/?page=${page}&search=${globalSearch || ''}${statusQuery}`);
+            let url = `lab/charges/?page=${page}&search=${globalSearch || ''}${statusQuery}`;
+
+            if (pageSize === 'all') {
+                url += `&page_size=10000`;
+            } else {
+                url += `&page_size=${pageSize}`;
+            }
+
+            const { data } = await api.get(url);
             setChargesData(data || { results: [], count: 0 });
         } catch (err) { showToast('error', 'Failed to fetch lab queue'); }
         finally { if (showLoading) setLoading(false); }
@@ -963,8 +972,36 @@ const Laboratory = () => {
                                     </tbody>
                                 </table>
                             </div>
-                            <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-                                <Pagination current={page} total={Math.ceil(chargesData.count / 10)} onPageChange={setPage} loading={loading} compact />
+                            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
+
+                                {/* Pagination Size Selector */}
+                                <div className="flex items-center gap-2 text-sm text-slate-500 font-bold bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                                    <span>Rows per page:</span>
+                                    <select
+                                        value={pageSize}
+                                        onChange={(e) => {
+                                            setPageSize(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                                            setPage(1); // Reset to page 1
+                                        }}
+                                        className="bg-transparent outline-none text-slate-900 cursor-pointer"
+                                    >
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                        <option value="all">View All</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex-1 w-full md:w-auto">
+                                    <Pagination
+                                        current={page}
+                                        total={Math.ceil((chargesData.count || 0) / (pageSize === 'all' ? (chargesData.count || 1) : pageSize))}
+                                        onPageChange={setPage}
+                                        loading={loading}
+                                        compact
+                                    />
+                                </div>
                             </div>
                         </>
                     )}

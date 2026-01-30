@@ -14,6 +14,12 @@ from .serializers import (
     LabTestSerializer, LabCategorySerializer, LabSupplierSerializer, LabPurchaseSerializer
 )
 
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 10000
 
 class IsLabOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -159,6 +165,7 @@ class LabChargeViewSet(viewsets.ModelViewSet):
     queryset = LabCharge.objects.all().order_by('-created_at')
     serializer_class = LabChargeSerializer
     permission_classes = [IsLabOrAdmin]
+    pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     search_fields = ['test_name', 'visit__patient__full_name', 'visit__patient__phone']
     filterset_fields = ['visit', 'status']
