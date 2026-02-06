@@ -122,7 +122,7 @@ const HistoryModal = ({ history, onClose }) => {
                                                 <p className="font-bold text-slate-900 text-sm">{report.test_name}</p>
                                                 <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Technician: {report.technician_name}</p>
                                             </div>
-                                            <span className="text-xs font-mono text-slate-400">{new Date(report.report_date).toLocaleDateString()}</span>
+                                            <span className="text-xs font-mono text-slate-400">{(() => { const d = new Date(report.report_date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</span>
                                         </div>
                                         <div className="p-4">
                                             {Array.isArray(report.results) ? (
@@ -778,7 +778,7 @@ const Doctor = () => {
                                                                     <p className="font-bold text-slate-900 text-sm">{report.test_name}</p>
                                                                     <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Technician: {report.technician}</p>
                                                                 </div>
-                                                                <span className="text-xs font-mono text-slate-400">{new Date(report.date).toLocaleDateString()}</span>
+                                                                <span className="text-xs font-mono text-slate-400">{(() => { const d = new Date(report.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</span>
                                                             </div>
                                                             <div className="p-4">
                                                                 {Array.isArray(report.results) ? (

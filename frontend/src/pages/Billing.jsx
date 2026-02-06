@@ -57,7 +57,7 @@ const Billing = () => {
         visit: null,
         doctor: "",
         payment_status: "PENDING",
-        items: [{ dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: "" }]
+        items: [{ dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, hsn: "", batch: "", gst_percent: 0, expiry: "", dosage: "", duration: "", mfr: "" }]
     });
 
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -173,7 +173,8 @@ const Billing = () => {
             gst_percent: stock.gst_percent || 0,
             expiry: stock.expiry_date || "",
             stock_deducted: false,
-            deducted_qty: 0
+            deducted_qty: 0,
+            mfr: stock.manufacturer || ""
         };
         setFormData({ ...formData, items: newItems });
         setStockSearch({ index: -1, term: "" });
@@ -400,7 +401,8 @@ const Billing = () => {
                             dosage: p.details || "",
                             duration: "",
                             stock_deducted: !!pharmacyRecord,
-                            deducted_qty: pharmacyRecord ? pharmacyRecord.qty : 0
+                            deducted_qty: pharmacyRecord ? pharmacyRecord.qty : 0,
+                            mfr: pharmacyRecord ? (pharmacyRecord.manufacturer || "") : (stockItem ? (stockItem.manufacturer || "") : "")
                         });
                         addedMedNames.add(medName.toLowerCase());
                     });
@@ -823,7 +825,7 @@ const Billing = () => {
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-xs font-medium text-slate-500">{new Date(invoice.created_at).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 text-xs font-medium text-slate-500">{(() => { const d = new Date(invoice.created_at); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</td>
                                     <td className="px-6 py-4 text-right flex justify-end gap-2">
                                         {/* IMPORTANT: Buttons are always visible now, no group-hover opacity */}
                                         {invoice.payment_status !== 'PAID' && (
@@ -874,7 +876,7 @@ const Billing = () => {
             <AnimatePresence>
                 {showModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print-modal">
-                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white w-full max-w-5xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white w-full max-w-7xl rounded-[2rem] shadow-2xl overflow-hidden print:overflow-visible flex flex-col h-[95vh] print:max-h-none print:h-auto print:rounded-none print:shadow-none">
 
                             {/* Modal Header (Hide on Print) */}
                             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center no-print">
@@ -893,22 +895,24 @@ const Billing = () => {
                             </div>
 
                             {/* Modal Body (Printable Area) */}
-                            <div className="flex-1 overflow-y-auto p-12 bg-white print-content" id="invoice-print-area">
+                            <div className="flex-1 overflow-y-auto print:overflow-visible p-8 bg-white print-content h-auto" id="invoice-print-area">
 
-                                {/* Invoice Header */}
-                                <div className="flex justify-between items-start mb-12">
+                                <div className="flex flex-row justify-between items-start mb-8">
                                     <div>
                                         <h1 className="text-3xl font-black text-slate-900 tracking-widest uppercase">REVIVE HOSPITAL</h1>
                                         <p className="text-xs font-bold text-slate-500 tracking-widest mt-1">HEALTH & RESEARCH CENTRE</p>
-                                        <div className="mt-4 text-xs text-slate-400 space-y-1">
-                                            <p>Anjukunnn</p>
+                                        <div className="mt-4 text-xs text-slate-500 font-bold space-y-1">
+                                            <p>Anjukunnu</p>
                                             <p>Ph: +91 8547299047</p>
+                                            <p>GST NO : 32DAYPG2657C1Z0</p>
+                                            <p className="text-[10px] uppercase tracking-wide border px-1 py-0.5 inline-block border-slate-300 rounded">COMPOSITION TAXABLE PERSON</p>
+                                            <p>DL NO : KL-WYD-159132 KL-WYD-159133</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-4xl font-black text-slate-200">INVOICE</div>
                                         <p className="text-sm font-bold text-slate-900 mt-2">#{formData.id ? formData.id.slice(0, 8).toUpperCase() : 'DRAFT'}</p>
-                                        <p className="text-xs text-slate-500">{new Date().toLocaleDateString()}</p>
+                                        <p className="text-xs text-slate-500">{(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`; })()}</p>
                                     </div>
                                 </div>
 
@@ -946,19 +950,21 @@ const Billing = () => {
                                     </div>
                                 </div>
 
-                                {/* Items Table */}
-                                <div className="mb-12">
-                                    <table className="w-full text-left text-sm">
+                                {/* Items Table - Added overflow handling */}
+                                <div className="mb-12 overflow-x-auto print:overflow-visible">
+                                    <table className="w-full text-left text-sm min-w-[800px] print:min-w-full print:text-[10px]">
                                         <thead className="border-b-2 border-slate-900">
                                             <tr>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-10">#</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest">Description</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center">Dosage</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center">Duration</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center">Qty</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center">GST %</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-right">Price</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-right">Amount</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-8 print:w-6">#</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest min-w-[200px] print:min-w-0 print:w-auto">Description</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center print:w-12">HSN</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center print:w-12">MFR</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center print:w-16">Batch</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center print:w-16">Exp</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center print:w-10">Qty</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center print:w-10">GST%</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-right print:w-16">Price</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-28 text-right print:w-20">Amount</th>
                                                 <th className="py-3 w-8 no-print"></th>
                                             </tr>
                                         </thead>
@@ -967,8 +973,9 @@ const Billing = () => {
                                                 <tr key={idx} className="group">
                                                     <td className="py-4 text-slate-400 font-mono">{idx + 1}</td>
                                                     <td className="py-4 relative">
+                                                        <span className="print-only font-bold text-slate-700 text-sm whitespace-pre-wrap print-text-black">{item.description}</span>
                                                         <input
-                                                            className="w-full bg-transparent outline-none font-bold text-slate-700 placeholder:text-slate-300 print:placeholder-transparent"
+                                                            className="w-full bg-transparent outline-none font-bold text-slate-700 placeholder:text-slate-300 print:hidden"
                                                             placeholder="Item Name / Service"
                                                             value={item.description}
                                                             onChange={(e) => {
@@ -1013,30 +1020,21 @@ const Billing = () => {
                                                         )}
                                                     </td>
                                                     <td className="py-4 text-center">
-                                                        <input
-                                                            className="w-full bg-transparent text-center font-medium outline-none text-slate-500 text-xs"
-                                                            value={item.dosage || ''}
-                                                            onChange={(e) => {
-                                                                const newItems = [...formData.items];
-                                                                newItems[idx] = { ...item, dosage: e.target.value };
-                                                                setFormData({ ...formData, items: newItems });
-                                                            }}
-                                                        />
+                                                        <span className="text-[10px] font-bold text-slate-600">{item.hsn}</span>
                                                     </td>
                                                     <td className="py-4 text-center">
-                                                        <input
-                                                            className="w-full bg-transparent text-center font-medium outline-none text-slate-500 text-xs"
-                                                            value={item.duration || ''}
-                                                            onChange={(e) => {
-                                                                const newItems = [...formData.items];
-                                                                newItems[idx] = { ...item, duration: e.target.value };
-                                                                setFormData({ ...formData, items: newItems });
-                                                            }}
-                                                        />
+                                                        <span className="text-[10px] font-bold text-slate-600">{item.mfr}</span>
                                                     </td>
                                                     <td className="py-4 text-center">
+                                                        <span className="text-[10px] font-bold text-slate-600">{item.batch}</span>
+                                                    </td>
+                                                    <td className="py-4 text-center">
+                                                        <span className="text-[10px] font-bold text-slate-600">{item.expiry}</span>
+                                                    </td>
+                                                    <td className="py-4 text-center">
+                                                        <span className="print-only font-bold text-slate-700 print-text-black">{item.qty}</span>
                                                         <input
-                                                            type="number" className="w-full bg-transparent text-center font-bold outline-none"
+                                                            type="number" className="w-full bg-transparent text-center font-bold outline-none print:hidden"
                                                             value={item.qty}
                                                             onChange={(e) => {
                                                                 const qty = parseInt(e.target.value) || 0;
@@ -1047,8 +1045,9 @@ const Billing = () => {
                                                         />
                                                     </td>
                                                     <td className="py-4 text-center">
+                                                        <span className="print-only font-bold text-slate-500 print-text-black">{item.gst_percent}</span>
                                                         <input
-                                                            type="number" className="w-full bg-transparent text-center font-medium outline-none text-slate-500"
+                                                            type="number" className="w-full bg-transparent text-center font-medium outline-none text-slate-500 print:hidden"
                                                             value={item.gst_percent}
                                                             placeholder="0"
                                                             onChange={(e) => {
@@ -1060,8 +1059,9 @@ const Billing = () => {
                                                         />
                                                     </td>
                                                     <td className="py-4 text-right">
+                                                        <span className="print-only font-bold text-slate-700 print-text-black">{item.unit_price}</span>
                                                         <input
-                                                            type="number" className="w-full bg-transparent text-right font-medium outline-none"
+                                                            type="number" className="w-full bg-transparent text-right font-medium outline-none print:hidden"
                                                             value={item.unit_price}
                                                             onChange={(e) => {
                                                                 const price = parseFloat(e.target.value) || 0;
@@ -1072,9 +1072,10 @@ const Billing = () => {
                                                         />
                                                     </td>
                                                     <td className="py-4 text-right">
+                                                        <span className="print-only font-bold text-slate-900 print-text-black">{item.amount}</span>
                                                         <input
                                                             type="number"
-                                                            className="w-full bg-transparent text-right font-bold text-slate-900 outline-none placeholder:text-slate-300 print:placeholder-transparent"
+                                                            className="w-full bg-transparent text-right font-bold text-slate-900 outline-none placeholder:text-slate-300 print:hidden"
                                                             value={item.amount}
                                                             onChange={(e) => {
                                                                 const newAmount = parseFloat(e.target.value) || 0;
@@ -1097,7 +1098,7 @@ const Billing = () => {
                                         </tbody>
                                     </table>
                                     <button
-                                        onClick={() => setFormData(prev => ({ ...prev, items: [...prev.items, { dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, dosage: "", duration: "" }] }))}
+                                        onClick={() => setFormData(prev => ({ ...prev, items: [...prev.items, { dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, dosage: "", duration: "", hsn: "", mfr: "", batch: "", expiry: "" }] }))}
                                         className="mt-4 text-xs font-bold text-blue-600 hover:underline uppercase tracking-wide no-print flex items-center gap-1"
                                     >
                                         <Plus size={12} /> Add Item Line
@@ -1106,15 +1107,26 @@ const Billing = () => {
 
                                 {/* Footer Totals */}
                                 <div className="flex justify-end">
-                                    <div className="w-64 space-y-3">
+                                    <div className="w-80 space-y-3">
                                         <div className="flex justify-between text-sm font-medium text-slate-500">
                                             <span>Subtotal</span>
                                             <span>₹{calculateSubtotal(formData.items).toFixed(2)}</span>
                                         </div>
                                         <div className="border-t-2 border-slate-900 pt-3 flex justify-between items-end">
                                             <span className="text-xs font-black text-slate-900 uppercase tracking-widest">Total</span>
-                                            <span className="text-3xl font-black text-slate-900 leading-none">₹{Math.ceil(calculateSubtotal(formData.items)).toFixed(2)}</span>
+                                            <span className="text-2xl font-black text-slate-900 leading-none">₹{Math.ceil(calculateSubtotal(formData.items)).toFixed(2)}</span>
                                         </div>
+                                    </div>
+                                </div>
+                                <div className="mt-12 pt-8 border-t border-slate-200 flex justify-between items-end">
+                                    <div className="text-xs text-slate-500 max-w-sm">
+                                        <p className="font-bold uppercase tracking-wide mb-1">Declaration:</p>
+                                        <p>Certified that the medicines sold under this invoice are as per the prescription of a Registered Medical Practitioner.</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="h-12 w-48 mb-2 mx-auto"></div>
+                                        <p className="text-sm font-bold text-slate-900">Pharmacist Sign</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature</p>
                                     </div>
                                 </div>
                             </div>
@@ -1135,11 +1147,12 @@ const Billing = () => {
                             </div>
                         </motion.div>
                     </div>
-                )}
-            </AnimatePresence>
+                )
+                }
+            </AnimatePresence >
 
             {/* --- Payment Modal --- */}
-            <AnimatePresence>
+            < AnimatePresence >
                 {showPaymentModal && paymentData.invoice && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 no-print">
                         <motion.div
@@ -1225,7 +1238,7 @@ const Billing = () => {
                         </motion.div>
                     </div>
                 )}
-            </AnimatePresence>
+            </AnimatePresence >
 
         </div >
     );

@@ -9,6 +9,7 @@ django.setup()
 
 from pharmacy.models import Supplier, PharmacyStock
 from lab.models import LabSupplier, LabInventory, LabCategory, LabTest, LabTestParameter
+from patients.models import Patient
 
 def create_pharmacy_data():
     print("Creating Pharmacy dummy data...")
@@ -196,7 +197,46 @@ def create_lab_data():
                 defaults=p_data
             )
 
+def create_patient_data():
+    print("Creating Patient dummy data...")
+    patients = [
+        {
+            "full_name": "John Doe",
+            "age": 30,
+            "gender": "M",
+            "phone": "9876543210",
+            "address": "123 Main St, Mumbai",
+            "registration_number": "PAT001",
+            "age_months": 0
+        },
+        {
+            "full_name": "Jane Smith",
+            "age": 25,
+            "gender": "F",
+            "phone": "8765432109",
+            "address": "456 Elm St, Delhi",
+            "registration_number": "PAT002",
+            "age_months": 6
+        },
+        {
+            "full_name": "Bob Johnson",
+            "age": 45,
+            "gender": "M",
+            "phone": "7654321098",
+            "address": "789 Oak St, Bangalore",
+            "registration_number": "PAT003",
+            "age_months": 0
+        }
+    ]
+
+    for patient_data in patients:
+        Patient.objects.update_or_create(
+            phone=patient_data["phone"],
+            defaults=patient_data
+        )
+
 if __name__ == "__main__":
     create_pharmacy_data()
     create_lab_data()
+    create_patient_data()
     print("Dummy data added successfully!")

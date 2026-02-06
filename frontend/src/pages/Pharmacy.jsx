@@ -41,7 +41,10 @@ const ReceiptTemplate = ({ sale }) => (
         </div>
 
         <div className="grid grid-cols-2 gap-x-8 gap-y-1 border-b border-dashed border-slate-300 pb-4 mb-4">
-            <div className="flex justify-between"><span>Bill Date</span> <span>: {new Date(sale.sale_date).toLocaleDateString()}</span></div>
+            <div className="flex justify-between"><span>Bill Date</span> <span>: {(() => {
+                const d = new Date(sale.sale_date);
+                return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            })()}</span></div>
             <div className="flex justify-between"><span>Invoice No</span> <span className="font-bold">: {sale.invoice_no || sale.id?.slice(0, 8).toUpperCase()}</span></div>
             <div className="flex justify-between"><span>Patient</span> <span>: {sale.patient?.full_name || 'Walk-In'}</span></div>
             <div className="flex justify-between"><span>Doctor</span> <span>: {sale.doctor?.username || '---'}</span></div>
@@ -839,7 +842,7 @@ const Pharmacy = () => {
                         </div>
                         {/* POS Right Side */}
                         <div className="w-[35%] bg-white flex flex-col shadow-[-10px_0_40px_-15px_rgba(0,0,0,0.05)] z-20">
-                            <div className="p-6 border-b border-slate-100 bg-slate-50 shrink-0"><div className="flex justify-between items-center mb-4"><h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><ShoppingCart size={16} className="text-blue-600" /> Current Bill</h2><span className="text-xs font-bold text-slate-400">{new Date().toLocaleDateString()}</span></div>{selectedPatient ? (<div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between"><div><p className="text-[10px] text-slate-400 font-bold uppercase">Billed To</p><p className="text-sm font-bold text-slate-900">{selectedPatient.full_name}</p></div><button onClick={() => setSelectedPatient(null)} className="text-slate-400 hover:text-red-500"><X size={16} /></button></div>) : <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs font-bold text-rose-700 text-center animate-pulse">Please Select Patient</div>}</div>
+                            <div className="p-6 border-b border-slate-100 bg-slate-50 shrink-0"><div className="flex justify-between items-center mb-4"><h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><ShoppingCart size={16} className="text-blue-600" /> Current Bill</h2><span className="text-xs font-bold text-slate-400">{(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</span></div>{selectedPatient ? (<div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between"><div><p className="text-[10px] text-slate-400 font-bold uppercase">Billed To</p><p className="text-sm font-bold text-slate-900">{selectedPatient.full_name}</p></div><button onClick={() => setSelectedPatient(null)} className="text-slate-400 hover:text-red-500"><X size={16} /></button></div>) : <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs font-bold text-rose-700 text-center animate-pulse">Please Select Patient</div>}</div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white">
                                 {cart.length === 0 ? (<div className="flex flex-col items-center justify-center h-full opacity-40"><ShoppingCart size={40} className="mb-2" /><p className="text-xs font-bold uppercase">Empty Cart</p></div>) : cart.map((item, idx) => (
                                     <div key={idx} className="flex justify-between items-center p-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
@@ -929,7 +932,7 @@ const Pharmacy = () => {
                                             <tr key={imp.id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-6 py-4 font-bold text-slate-900">#{imp.supplier_invoice_no}</td>
                                                 <td className="px-6 py-4">{suppliers.find(s => s.id === imp.supplier)?.supplier_name || imp.supplier_name || 'N/A'}</td>
-                                                <td className="px-6 py-4 font-mono text-xs text-slate-500">{new Date(imp.created_at).toLocaleDateString()}</td>
+                                                <td className="px-6 py-4 font-mono text-xs text-slate-500">{(() => { const d = new Date(imp.created_at); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</td>
                                                 <td className="px-6 py-4">
                                                     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold ${imp.status === 'DRAFT' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-100 text-slate-600'}`}>
                                                         {imp.status === 'DRAFT' ? 'DRAFT' : imp.items_detail ? imp.items_detail.length : 0}
@@ -981,7 +984,7 @@ const Pharmacy = () => {
                                             <div>
                                                 <div className="flex items-center gap-3 mb-2">
                                                     <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-black uppercase tracking-wider">Valid Invoice</span>
-                                                    <span className="text-slate-400 text-xs font-bold uppercase">{new Date(returnSaleData.sale_date).toLocaleString()}</span>
+                                                    <span className="text-slate-400 text-xs font-bold uppercase">{(() => { const d = new Date(returnSaleData.sale_date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`; })()}</span>
                                                 </div>
                                                 <h3 className="text-3xl font-black text-slate-900 font-mono">#{returnSaleData.id.slice(0, 8).toUpperCase()}</h3>
                                                 <p className="text-sm font-bold text-slate-500 mt-1">Billed To: <span className="text-slate-900">{returnSaleData.patient_name || "Guest"}</span></p>
@@ -1079,7 +1082,7 @@ const Pharmacy = () => {
                                     <div className="p-4 bg-white border border-slate-100 rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase">Batch No</p><p className="font-mono font-bold text-slate-900">{selectedStockItem.batch_no}</p></div>
                                     <div className="p-4 bg-white border border-slate-100 rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase">Tablets/Strip</p><p className="font-mono font-bold text-slate-900">{selectedStockItem.tablets_per_strip || 1}</p></div>
                                 </div>
-                                <div className="p-4 bg-white border border-slate-100 rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase">Expiry</p><p className="font-mono font-bold text-slate-900">{new Date(selectedStockItem.expiry_date).toLocaleDateString()}</p></div>
+                                <div className="p-4 bg-white border border-slate-100 rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase">Expiry</p><p className="font-mono font-bold text-slate-900">{(() => { const d = new Date(selectedStockItem.expiry_date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</p></div>
                                 {selectedStockItem.tablets_per_strip > 1 && (
                                     <button onClick={() => handleSyncToTablets(selectedStockItem)} className="w-full mt-4 h-12 bg-blue-50 text-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-100 transition-all border border-blue-200">
                                         Convert Strips to Tablets (x{selectedStockItem.tablets_per_strip})
@@ -1109,7 +1112,7 @@ const Pharmacy = () => {
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedImport(null)} />
                         <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-white w-full max-w-[90vw] rounded-[2rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
                             <div className="p-8 bg-slate-50 border-b border-slate-100">
-                                <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-black text-slate-900">Invoice #{selectedImport.invoice_no || '---'}</h2><p className="text-sm font-bold text-slate-400">Imported on {new Date(selectedImport.created_at).toLocaleDateString()}</p></div><button onClick={() => setSelectedImport(null)} className="p-2 bg-white rounded-full hover:text-red-500 shadow-sm"><X size={20} /></button></div>
+                                <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-black text-slate-900">Invoice #{selectedImport.invoice_no || '---'}</h2><p className="text-sm font-bold text-slate-400">Imported on {(() => { const d = new Date(selectedImport.created_at); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</p></div><button onClick={() => setSelectedImport(null)} className="p-2 bg-white rounded-full hover:text-red-500 shadow-sm"><X size={20} /></button></div>
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Value</p><p className="text-2xl font-black text-slate-900">₹{Math.round(selectedImport.total_amount)}</p></div>
                                     <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Items Count</p><p className="text-2xl font-black text-emerald-600">{selectedImport.items_detail?.length || 0}</p></div>

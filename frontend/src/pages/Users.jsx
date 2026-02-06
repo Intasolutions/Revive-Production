@@ -140,7 +140,7 @@ const Users = () => {
                                     </td>
                                     <td className="px-8 py-6">
                                         <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                                            {new Date(s.date_joined).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            {(() => { const d = new Date(s.date_joined); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}
                                         </span>
                                     </td>
                                     <td className="px-8 py-6">

@@ -102,7 +102,7 @@ class LabInventorySerializer(serializers.ModelSerializer):
         fields = [
             'item_id', 'item_name', 'category', 'qty', 'cost_per_unit', 'reorder_level', 
             'is_low_stock', 'logs', 'batches',
-            'manufacturer', 'unit', 'is_liquid', 'pack_size', 
+            'manufacturer', 'unit', 'is_liquid', 'pack_size', 'items_per_pack',
             'gst_percent', 'discount_percent', 'hsn', 'mrp',
             'created_at', 'updated_at'
         ]
@@ -114,6 +114,7 @@ class LabPurchaseItemSerializer(serializers.ModelSerializer):
     category = serializers.CharField(write_only=True, required=False)
     unit = serializers.CharField(write_only=True, required=False)
     is_liquid = serializers.BooleanField(write_only=True, required=False)
+    items_per_pack = serializers.IntegerField(write_only=True, required=False, default=1)
     inventory_item_name = serializers.CharField(source='inventory_item.item_name', read_only=True)
 
     class Meta:
@@ -173,6 +174,7 @@ class LabPurchaseSerializer(serializers.ModelSerializer):
             category = item_data.pop('category', 'General')
             unit = item_data.pop('unit', 'units')
             is_liquid = item_data.pop('is_liquid', False)
+            items_per_pack = item_data.pop('items_per_pack', 1)
             
             # 1. Get/Create Master Inventory
             inventory_item, created = LabInventory.objects.get_or_create(
@@ -181,6 +183,7 @@ class LabPurchaseSerializer(serializers.ModelSerializer):
                     'category': category,
                     'unit': unit,
                     'is_liquid': is_liquid,
+                    'items_per_pack': items_per_pack,
                     'cost_per_unit': item_data.get('unit_cost', 0),
                     'gst_percent': item_data.get('gst_percent', 0),
                     'discount_percent': item_data.get('discount_percent', 0),
@@ -193,6 +196,7 @@ class LabPurchaseSerializer(serializers.ModelSerializer):
                 # Update latest cost and details
                 inventory_item.cost_per_unit = item_data.get('unit_cost', inventory_item.cost_per_unit)
                 inventory_item.is_liquid = is_liquid # Ensure liquid status is updated/consistent
+                inventory_item.items_per_pack = items_per_pack
                 inventory_item.save()
 
             # 2. Create Batch

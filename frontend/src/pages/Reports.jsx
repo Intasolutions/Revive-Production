@@ -99,7 +99,7 @@ const Reports = () => {
                     row.patient,
                     `₹${row.amount}`,
                     <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black">{row.status}</span>,
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
@@ -111,7 +111,7 @@ const Reports = () => {
                     row.patient,
                     row.doctor,
                     <span className="px-2 py-1 bg-sky-100 text-sky-700 rounded-full text-[10px] font-black">{row.status}</span>,
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
@@ -122,7 +122,7 @@ const Reports = () => {
                     row.id.substring(0, 8),
                     row.patient,
                     `₹${row.total}`,
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
@@ -134,7 +134,7 @@ const Reports = () => {
                     row.patient,
                     row.test_name,
                     `₹${row.amount}`,
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
@@ -148,7 +148,7 @@ const Reports = () => {
                     row.qty,
                     `₹${row.cost || '0.00'}`,
                     row.performed_by || 'Unknown',
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
@@ -160,7 +160,7 @@ const Reports = () => {
                     row.doctor,
                     row.patient,
                     row.diagnosis,
-                    new Date(row.date).toLocaleDateString(),
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })(),
                     <Button size="xs" onClick={() => setSelectedNote(row)} className="text-[10px] h-7 px-3 bg-slate-900 rounded-lg">View Case</Button>
                 ])
             };
@@ -175,7 +175,7 @@ const Reports = () => {
                     <span className={`px-2 py-1 rounded-full text-[10px] font-black ${row.type === 'STOCK_IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{row.type}</span>,
                     row.qty,
                     `₹${row.cost}`,
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
@@ -185,7 +185,7 @@ const Reports = () => {
                 rows: (data?.details || []).map(row => [
                     row.item_name,
                     row.batch_no,
-                    <span className={`font-bold ${new Date(row.expiry_date) < new Date() ? 'text-red-500' : 'text-amber-500'}`}>{new Date(row.expiry_date).toLocaleDateString()}</span>,
+                    <span className={`font-bold ${new Date(row.expiry_date) < new Date() ? 'text-red-500' : 'text-amber-500'}`}>{(() => { const d = new Date(row.expiry_date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</span>,
                     row.qty,
                     `₹${row.cost}`
                 ])
@@ -199,7 +199,7 @@ const Reports = () => {
                     row.supplier,
                     `₹${row.total}`,
                     row.type,
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
@@ -213,11 +213,11 @@ const Reports = () => {
                     row.description,
                     row.qty,
                     `₹${row.amount}`,
-                    new Date(row.date).toLocaleDateString()
+                    (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()
                 ])
             };
         }
-        return { headers: ['ID', 'Details', 'Date'], rows: (data?.details || []).map(row => [row.id.substring(0, 8), row.patient || 'Internal', new Date(row.date).toLocaleDateString()]) };
+        return { headers: ['ID', 'Details', 'Date'], rows: (data?.details || []).map(row => [row.id.substring(0, 8), row.patient || 'Internal', (() => { const d = new Date(row.date); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()]) };
     };
 
     const tableConfig = getTableConfig();

@@ -156,7 +156,7 @@ const Laboratory = () => {
     const [testForm, setTestForm] = useState({ test_name: '', amount: '' });
     const [selectedTests, setSelectedTests] = useState([]); // Array of { name, price, isCustom }
     const [stockForm, setStockForm] = useState({ qty: '', cost: '', notes: '' });
-    const [inventoryForm, setInventoryForm] = useState({ item_name: '', category: 'REAGENT', qty: 0, cost_per_unit: '', reorder_level: 10 });
+    const [inventoryForm, setInventoryForm] = useState({ item_name: '', category: 'REAGENT', qty: 0, cost_per_unit: '', reorder_level: 10, items_per_pack: 1, num_packs: 0 });
     const [visitSearch, setVisitSearch] = useState([]);
     const [visitQuery, setVisitQuery] = useState('');
     const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
@@ -427,6 +427,14 @@ const Laboratory = () => {
     const handleManualItemChange = (index, field, value) => {
         const updated = [...manualInvoice.items];
         updated[index][field] = value;
+
+        // Auto-calculate Qty based on Packs & Items/Pack
+        if (field === 'num_packs' || field === 'items_per_pack') {
+            const packs = field === 'num_packs' ? value : (updated[index].num_packs || 0);
+            const perPack = field === 'items_per_pack' ? value : (updated[index].items_per_pack || 1);
+            updated[index].qty = parseInt(packs) * parseInt(perPack);
+        }
+
         setManualInvoice({ ...manualInvoice, items: updated });
     };
 
@@ -438,7 +446,7 @@ const Laboratory = () => {
                 qty: 1, unit_cost: 0, mrp: 0,
                 gst_percent: 0, discount_percent: 0,
                 unit: 'units', is_liquid: false, manufacturer: '',
-                pack_size: ''
+                pack_size: '', items_per_pack: 1, num_packs: 1
             }]
         }));
     };
@@ -466,7 +474,10 @@ const Laboratory = () => {
             unit_cost: product.cost_per_unit || 0,
             mrp: product.mrp || 0,
             gst_percent: product.gst_percent || 0,
-            discount_percent: product.discount_percent || 0
+            discount_percent: product.discount_percent || 0,
+            items_per_pack: product.items_per_pack || 1,
+            num_packs: 1,
+            qty: 1 * (product.items_per_pack || 1)
         };
         setManualInvoice({ ...manualInvoice, items: updated });
         setManualProductSearch({ rowIdx: null, results: [] });
@@ -485,15 +496,23 @@ const Laboratory = () => {
                 supplier_invoice_no: manualInvoice.supplier_invoice_no || 'INV-NA',
                 invoice_date: manualInvoice.invoice_date,
                 purchase_type: manualInvoice.purchase_type,
-                items: manualInvoice.items.map(item => ({
-                    ...item,
-                    expiry_date: item.expiry_date || new Date().toISOString().split('T')[0],
-                    qty: parseInt(item.qty),
-                    unit_cost: parseFloat(item.unit_cost),
-                    mrp: parseFloat(item.mrp),
-                    gst_percent: parseFloat(item.gst_percent) || 0,
-                    discount_percent: parseFloat(item.discount_percent) || 0
-                })),
+                items: manualInvoice.items.map(item => {
+                    // Convert Pack Rate to Unit Cost for Backend
+                    const packRate = parseFloat(item.unit_cost) || 0;
+                    const itemsPerPack = parseInt(item.items_per_pack) || 1;
+                    const totalQty = parseInt(item.qty) || (parseInt(item.num_packs || 0) * itemsPerPack);
+                    const perUnitCost = packRate / itemsPerPack;
+
+                    return {
+                        ...item,
+                        expiry_date: item.expiry_date || new Date().toISOString().split('T')[0],
+                        qty: totalQty,
+                        unit_cost: perUnitCost,
+                        mrp: parseFloat(item.mrp) || 0,
+                        gst_percent: parseFloat(item.gst_percent) || 0,
+                        discount_percent: parseFloat(item.discount_percent) || 0
+                    };
+                }),
                 cash_discount: manualInvoice.cash_discount,
                 courier_charge: manualInvoice.courier_charge
             });
@@ -667,17 +686,27 @@ const Laboratory = () => {
     const handleSaveItem = async (e) => {
         e.preventDefault();
         try {
+            // Calculate final Qty if packs are used
+            const finalQty = inventoryForm.num_packs > 0
+                ? parseInt(inventoryForm.num_packs) * parseInt(inventoryForm.items_per_pack)
+                : parseInt(inventoryForm.qty);
+
+            const payload = {
+                ...inventoryForm,
+                qty: finalQty
+            };
+
             if (inventoryForm.id) {
                 // Edit Mode
-                await api.patch(`lab/inventory/${inventoryForm.id}/`, inventoryForm);
+                await api.patch(`lab/inventory/${inventoryForm.id}/`, payload);
                 showToast('success', 'Item Updated Successfully');
             } else {
                 // Create Mode
-                await api.post('lab/inventory/', inventoryForm);
+                await api.post('lab/inventory/', payload);
                 showToast('success', 'New Item Added Successfully');
             }
             setShowInventoryModal(false);
-            setInventoryForm({ item_name: '', category: 'REAGENT', qty: 0, cost_per_unit: '', reorder_level: 10 });
+            setInventoryForm({ item_name: '', category: 'REAGENT', qty: 0, cost_per_unit: '', reorder_level: 10, items_per_pack: 1, num_packs: 0 });
             fetchInventory();
         } catch (err) { showToast('error', "Failed to save item"); }
     };
@@ -689,7 +718,9 @@ const Laboratory = () => {
             category: item.category,
             qty: item.qty,
             cost_per_unit: item.cost_per_unit || '',
-            reorder_level: item.reorder_level
+            reorder_level: item.reorder_level,
+            items_per_pack: item.items_per_pack || 1,
+            num_packs: item.items_per_pack > 1 ? Math.floor(item.qty / item.items_per_pack) : 0
         });
         setShowInventoryModal(true);
     };
@@ -1026,7 +1057,7 @@ const Laboratory = () => {
                                                     <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold uppercase">{item.category}</span>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono font-bold text-slate-700">{item.qty} Units</td>
-                                                <td className="px-6 py-4 font-bold text-slate-700">₹{(item.qty * (parseFloat(item.cost_per_unit) || 0)).toFixed(2)}</td>
+                                                <td className="px-6 py-4 font-bold text-slate-700">₹{(item.qty * (parseFloat(item.cost_per_unit) || 0) * (1 + ((parseFloat(item.gst_percent) || 0) / 100))).toFixed(2)}</td>
                                                 <td className="px-6 py-4 text-sm text-slate-500 font-medium">{item.reorder_level} Units</td>
                                                 <td className="px-6 py-4">
                                                     {item.is_low_stock ? (
@@ -1766,13 +1797,9 @@ const Laboratory = () => {
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase">Qty Used:</label>
                                                         <input
                                                             type="number"
-                                                            value={item.qty}
-                                                            onChange={e => {
-                                                                const newItems = [...resultData.consumed_items];
-                                                                newItems[idx].qty = parseInt(e.target.value) || 0;
-                                                                setResultData({ ...resultData, consumed_items: newItems });
-                                                            }}
-                                                            className="w-16 h-8 text-center bg-white border border-amber-200 rounded-lg font-bold text-slate-700 outline-none focus:border-amber-500"
+                                                            className="w-full bg-slate-50 border-none rounded-lg p-2 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 text-center"
+                                                            value={item.num_packs}
+                                                            onChange={(e) => handleManualItemChange(idx, 'num_packs', e.target.value)}
                                                         />
                                                     </div>
                                                 </div>
@@ -1834,7 +1861,7 @@ const Laboratory = () => {
                                     <div className="text-right space-y-1">
                                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Report ID</p>
                                         <p className="text-xl font-black text-slate-900">#{printCharge.lc_id.toString().slice(0, 8)}</p>
-                                        <p className="text-sm font-medium text-slate-500">{new Date().toLocaleDateString()}</p>
+                                        <p className="text-sm font-medium text-slate-500">{(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</p>
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 rounded-2xl p-6 mb-8 border border-slate-100">
@@ -1926,7 +1953,10 @@ const Laboratory = () => {
                                 <div className="flex justify-between items-end mt-20 pt-8 border-t border-slate-200">
                                     <div className="text-xs font-medium text-slate-400">
                                         <p>Generated by REVIVE Hospital Management System</p>
-                                        <p>{new Date().toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase()}</p>
+                                        <p>{(() => {
+                                            const d = new Date();
+                                            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase()}`;
+                                        })()}</p>
                                     </div>
                                     <div className="text-center">
                                         <div className="h-12 w-32 mb-2 mx-auto"></div>
@@ -2017,7 +2047,10 @@ const Laboratory = () => {
                                 <div className="text-right space-y-0.5">
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reg No</p>
                                     <p className="text-lg font-black text-slate-900">#{printCharge.registration_number || 'N/A'}</p>
-                                    <p className="text-xs font-medium text-slate-500">{new Date().toLocaleDateString()}</p>
+                                    <p className="text-xs font-medium text-slate-500">{(() => {
+                                        const d = new Date();
+                                        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                                    })()}</p>
                                 </div>
                             </div>
 
@@ -2110,7 +2143,10 @@ const Laboratory = () => {
                             <div className="flex justify-between items-end mt-auto pt-4 border-t border-slate-200">
                                 <div className="text-[10px] font-medium text-slate-400">
                                     <p>Generated by REVIVE Hospital Management System</p>
-                                    <p>{new Date().toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase()}</p>
+                                    <p>{(() => {
+                                        const d = new Date();
+                                        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase()}`;
+                                    })()}</p>
                                 </div>
                                 <div className="text-center">
                                     <div className="h-8 w-24 mb-1 mx-auto"></div>
@@ -2226,13 +2262,27 @@ const Laboratory = () => {
                                 <table className="w-full text-left">
                                     <thead className="bg-slate-50 sticky top-0 z-10">
                                         <tr>
-                                            {['Item Name', 'Mfr', 'Batch', 'Expiry', 'Unit', 'Liq?', 'Qty', 'Cost', 'MRP', 'Tax%', 'Total', ''].map(h => <th key={h} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[20%]">Item Name</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[8%]">Mfr</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[8%]">Batch</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[8%]">Expiry</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[5%]">Unit</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[4%]">Liq?</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[6%]">Packs</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[6%]">Itm/Pk</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-blue-500 uppercase tracking-widest w-[6%]">Total</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[8%]">Cost</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[8%]">Rate(GST)</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[8%]">MRP</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[5%]">Tax%</th>
+                                            <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[8%] text-right">Amt</th>
+                                            <th className="px-4 py-3 w-[4%]"></th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {manualInvoice.items.map((item, idx) => (
                                             <tr key={idx} className="hover:bg-blue-50/30 group">
-                                                <td className="px-4 py-2 relative w-[22%]">
+                                                <td className="px-4 py-2 relative">
                                                     <input
                                                         value={item.item_name}
                                                         onChange={e => handleManualItemChange(idx, 'item_name', e.target.value)}
@@ -2251,19 +2301,50 @@ const Laboratory = () => {
                                                         </div>
                                                     )}
                                                 </td>
-                                                <td className="px-4 py-2 w-[10%]"><input value={item.manufacturer} onChange={e => handleManualItemChange(idx, 'manufacturer', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" placeholder="Mfr" /></td>
-                                                <td className="px-4 py-2 w-[8%]"><input value={item.batch_no} onChange={e => handleManualItemChange(idx, 'batch_no', e.target.value)} className="w-full font-mono font-bold text-xs bg-transparent outline-none" placeholder="BATCH" /></td>
-                                                <td className="px-4 py-2 w-[8%]"><input type="date" value={item.expiry_date} onChange={e => handleManualItemChange(idx, 'expiry_date', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" /></td>
-                                                <td className="px-4 py-2 w-[6%]"><input value={item.unit} onChange={e => handleManualItemChange(idx, 'unit', e.target.value)} className="w-16 font-bold text-xs bg-transparent outline-none" placeholder="units" /></td>
-                                                <td className="px-4 py-2 text-center w-[4%]"><input type="checkbox" checked={item.is_liquid} onChange={e => handleManualItemChange(idx, 'is_liquid', e.target.checked)} className="w-4 h-4 accent-blue-600 rounded" /></td>
-                                                <td className="px-4 py-2 w-[8%]"><input type="number" value={item.qty} onChange={e => handleManualItemChange(idx, 'qty', e.target.value)} className="w-full font-black text-lg bg-emerald-50 text-emerald-900 rounded px-2 py-1 outline-none border border-emerald-200 focus:border-emerald-500 text-center shadow-inner" /></td>
-                                                <td className="px-4 py-2 w-[8%]"><input type="number" value={item.unit_cost} onChange={e => handleManualItemChange(idx, 'unit_cost', e.target.value)} className="w-full font-bold text-sm bg-transparent outline-none text-right" /></td>
-                                                <td className="px-4 py-2 w-[8%]"><input type="number" value={item.mrp} onChange={e => handleManualItemChange(idx, 'mrp', e.target.value)} className="w-full font-bold text-sm bg-transparent outline-none text-right" /></td>
-                                                <td className="px-4 py-2 w-[5%]"><input type="number" value={item.gst_percent} onChange={e => handleManualItemChange(idx, 'gst_percent', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" /></td>
-                                                <td className="px-4 py-2 font-black text-slate-900 w-[8%] text-right">
-                                                    ₹{((item.unit_cost * item.qty) * (1 + (item.gst_percent / 100))).toFixed(2)}
+                                                <td className="px-4 py-2"><input value={item.manufacturer} onChange={e => handleManualItemChange(idx, 'manufacturer', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" placeholder="Mfr" /></td>
+                                                <td className="px-4 py-2"><input value={item.batch_no} onChange={e => handleManualItemChange(idx, 'batch_no', e.target.value)} className="w-full font-mono font-bold text-xs bg-transparent outline-none" placeholder="BATCH" /></td>
+                                                <td className="px-4 py-2"><input type="date" value={item.expiry_date} onChange={e => handleManualItemChange(idx, 'expiry_date', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" /></td>
+                                                <td className="px-4 py-2"><input value={item.unit} onChange={e => handleManualItemChange(idx, 'unit', e.target.value)} className="w-16 font-bold text-xs bg-transparent outline-none" placeholder="units" /></td>
+                                                <td className="px-4 py-2 text-center"><input type="checkbox" checked={item.is_liquid} onChange={e => handleManualItemChange(idx, 'is_liquid', e.target.checked)} className="w-4 h-4 accent-blue-600 rounded" /></td>
+
+                                                {/* NEW COLUMNS */}
+                                                <td className="px-4 py-2">
+                                                    <input
+                                                        type="number"
+                                                        value={item.num_packs}
+                                                        onChange={e => handleManualItemChange(idx, 'num_packs', e.target.value)}
+                                                        className="w-full font-bold text-sm bg-slate-50 border border-slate-200 rounded p-1 text-center outline-none focus:border-blue-500"
+                                                        placeholder="Pks"
+                                                    />
                                                 </td>
-                                                <td className="px-4 py-2 w-[4%]"><button onClick={() => removeManualItem(idx)} className="p-1 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded"><Trash2 size={16} /></button></td>
+                                                <td className="px-4 py-2">
+                                                    <input
+                                                        type="number"
+                                                        value={item.items_per_pack}
+                                                        onChange={e => handleManualItemChange(idx, 'items_per_pack', e.target.value)}
+                                                        className="w-full font-bold text-sm bg-slate-50 border border-slate-200 rounded p-1 text-center outline-none focus:border-blue-500"
+                                                        placeholder="Itm"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <input
+                                                        type="number"
+                                                        value={item.qty}
+                                                        readOnly
+                                                        className="w-full font-black text-lg bg-emerald-50 text-emerald-900 rounded px-2 py-1 outline-none border border-emerald-200 text-center shadow-inner cursor-not-allowed"
+                                                    />
+                                                </td>
+
+                                                <td className="px-4 py-2"><input type="number" value={item.unit_cost} onChange={e => handleManualItemChange(idx, 'unit_cost', e.target.value)} className="w-full font-bold text-sm bg-transparent outline-none text-right" /></td>
+                                                <td className="px-4 py-2 font-black text-xs text-slate-500 text-right">
+                                                    {(parseFloat(item.unit_cost || 0) * (1 + (parseFloat(item.gst_percent || 0) / 100))).toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-2"><input type="number" value={item.mrp} onChange={e => handleManualItemChange(idx, 'mrp', e.target.value)} className="w-full font-bold text-sm bg-transparent outline-none text-right" /></td>
+                                                <td className="px-4 py-2"><input type="number" value={item.gst_percent} onChange={e => handleManualItemChange(idx, 'gst_percent', e.target.value)} className="w-full font-bold text-xs bg-transparent outline-none" /></td>
+                                                <td className="px-4 py-2 font-black text-slate-900 text-right">
+                                                    ₹{((item.unit_cost * item.num_packs) * (1 + (item.gst_percent / 100))).toFixed(2)}
+                                                </td>
+                                                <td className="px-4 py-2"><button onClick={() => removeManualItem(idx)} className="p-1 hover:bg-red-50 text-slate-300 hover:text-red-500 rounded"><Trash2 size={16} /></button></td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -2284,7 +2365,7 @@ const Laboratory = () => {
                                 <div className="text-right">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grand Total</p>
                                     <p className="text-3xl font-black text-slate-900">
-                                        ₹{Math.round(manualInvoice.items.reduce((acc, item) => acc + (item.unit_cost * item.qty * (1 + item.gst_percent / 100)), 0) - manualInvoice.cash_discount + manualInvoice.courier_charge)}
+                                        ₹{Math.round(manualInvoice.items.reduce((acc, item) => acc + (item.unit_cost * item.num_packs * (1 + item.gst_percent / 100)), 0) - manualInvoice.cash_discount + manualInvoice.courier_charge)}
                                     </p>
                                 </div>
                                 <Button onClick={submitManualPurchase} className="h-14 px-8 bg-blue-600 text-white font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 rounded-xl">Save Purchase</Button>
@@ -2360,6 +2441,38 @@ const Laboratory = () => {
                                             <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={16} />
                                         </div>
                                     </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Items Per Pack</label>
+                                            <input
+                                                type="number"
+                                                className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-blue-500 font-bold"
+                                                placeholder="e.g. 1"
+                                                value={inventoryForm.items_per_pack}
+                                                onChange={(e) => setInventoryForm({ ...inventoryForm, items_per_pack: e.target.value })}
+                                                min="1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">No. of Packs</label>
+                                            <input
+                                                type="number"
+                                                className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-blue-500 font-bold"
+                                                placeholder="e.g. 10"
+                                                value={inventoryForm.num_packs}
+                                                onChange={(e) => setInventoryForm({ ...inventoryForm, num_packs: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 flex justify-between items-center">
+                                        <span className="text-sm font-bold text-slate-600">Calculated Total Stock</span>
+                                        <span className="text-xl font-black text-blue-600">
+                                            {(parseInt(inventoryForm.num_packs || 0) * parseInt(inventoryForm.items_per_pack || 1)) || inventoryForm.qty} Units
+                                        </span>
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Initial Qty</label>

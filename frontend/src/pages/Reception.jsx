@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     UserPlus, Phone, User as UserIcon, ArrowRight, X,
     Activity, Thermometer, Heart, Scale, Stethoscope,
-    MapPin, ChevronRight, Search, CheckCircle2, AlertCircle, FileText, IndianRupee, Edit
+    MapPin, ChevronRight, Search, CheckCircle2, AlertCircle, FileText, IndianRupee, Edit, Trash2
 } from 'lucide-react';
 import { useSearch } from '../context/SearchContext';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../context/DialogContext';
 import Pagination from '../components/Pagination';
 import api from '../api/axios';
 import Billing from './Billing'; // Integrated Billing Module
@@ -56,6 +57,7 @@ const Toast = ({ message, type, onClose }) => (
 const Reception = () => {
     // --- State Management ---
     const { user } = useAuth();
+    const { confirm } = useDialog();
     const navigate = useNavigate();
     const [patientsData, setPatientsData] = useState({ results: [], count: 0 });
     const { globalSearch } = useSearch();
@@ -300,6 +302,27 @@ const Reception = () => {
         });
         setEditingPatientId(p.p_id || p.id);
         setShowAddModal(true);
+    };
+
+    const handleDeletePatient = async (p, e) => {
+        e.stopPropagation();
+        const isConfirmed = await confirm({
+            title: 'Delete Patient Record?',
+            message: `Are you sure you want to delete ${p.full_name}? This action cannot be undone.`,
+            confirmText: 'Delete',
+            type: 'danger'
+        });
+
+        if (isConfirmed) {
+            try {
+                await api.delete(`/reception/patients/${p.p_id}/`);
+                showToast('success', 'Patient record deleted successfully.');
+                fetchPatients(false);
+                fetchStats();
+            } catch (err) {
+                showToast('error', 'Failed to delete patient. Ensure no active visits exist.');
+            }
+        }
     };
 
     const handleAddNewPatient = () => {
@@ -572,6 +595,13 @@ const Reception = () => {
                                                                         <Edit size={16} />
                                                                     </button>
                                                                     <button
+                                                                        onClick={(e) => handleDeletePatient(p, e)}
+                                                                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                                                        title="Delete Patient"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                    <button
                                                                         onClick={(e) => handleApproveCasualty(e, p)}
                                                                         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100 text-xs font-bold hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
                                                                     >
@@ -651,15 +681,14 @@ const Reception = () => {
                                             <div className="space-y-4">
                                                 <div>
                                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Registration Number</label>
-                                                    <div className={`flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 transition-all ${errors.registration_number ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10'} ${editingPatientId ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                                                    <div className={`flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border-2 transition-all ${errors.registration_number ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10'}`}>
                                                         <FileText className={errors.registration_number ? "text-rose-400" : "text-slate-400"} size={20} />
                                                         <input
                                                             type="text"
                                                             placeholder="e.g. OP-2024-001"
-                                                            className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed"
+                                                            className="flex-1 bg-transparent font-semibold text-slate-900 placeholder:text-slate-400 outline-none"
                                                             value={form.registration_number}
                                                             onChange={(e) => setForm({ ...form, registration_number: e.target.value })}
-                                                            disabled={!!editingPatientId}
                                                         />
                                                     </div>
                                                     {errors.registration_number && <p className="text-xs font-bold text-rose-500 mt-2 ml-2 flex items-center gap-1"><AlertCircle size={12} /> {errors.registration_number}</p>}
@@ -992,7 +1021,7 @@ const Reception = () => {
                                                             <div className="flex justify-between items-start">
                                                                 <div>
                                                                     <p className="font-bold text-slate-900 text-sm">{visit.assigned_role === 'DOCTOR' ? `Dr. ${visit.doctor_name || 'Unassigned'}` : visit.assigned_role}</p>
-                                                                    <span className="text-xs font-bold text-slate-400">{new Date(visit.created_at).toLocaleDateString()}</span>
+                                                                    <span className="text-xs font-bold text-slate-400">{(() => { const d = new Date(visit.created_at); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</span>
                                                                 </div>
                                                                 <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${visit.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{visit.status}</span>
                                                             </div>
@@ -1047,7 +1076,7 @@ const Reception = () => {
                                                             <div className="flex justify-between items-start">
                                                                 <div>
                                                                     <p className="font-bold text-slate-900 text-sm">Invoice #{inv.id.toString().slice(0, 8)}</p>
-                                                                    <span className="text-xs font-bold text-slate-400">{new Date(inv.created_at).toLocaleDateString()}</span>
+                                                                    <span className="text-xs font-bold text-slate-400">{(() => { const d = new Date(inv.created_at); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; })()}</span>
                                                                 </div>
                                                                 <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${inv.payment_status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                                     {inv.payment_status}

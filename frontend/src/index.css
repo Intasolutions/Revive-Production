@@ -46,6 +46,11 @@ body {
     -moz-appearance: textfield;
 }
 
+/* Print Visibility Helper - Hidden by default on screen */
+.print-only {
+    display: none;
+}
+
 /* Print Styles */
 @media print {
     body * {
@@ -97,5 +102,17 @@ body {
         /* Set reasonable print padding */
         overflow: visible !important;
         background: white !important;
+    }
+
+    /* Robust print visibility helpers */
+    .print-only {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    .print-text-black {
+        color: black !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 }
