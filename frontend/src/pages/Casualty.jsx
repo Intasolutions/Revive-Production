@@ -126,7 +126,15 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
     };
 
     const filteredStock = stockSearch.length >= 2
-        ? pharmacyStock.filter(s => s.name.toLowerCase().includes(stockSearch.toLowerCase())).slice(0, 5)
+        ? pharmacyStock
+            .filter(s => s.name.toLowerCase().includes(stockSearch.toLowerCase()))
+            .sort((a, b) => {
+                // Prioritize CASUALTY category
+                if (a.category === 'CASUALTY' && b.category !== 'CASUALTY') return -1;
+                if (a.category !== 'CASUALTY' && b.category === 'CASUALTY') return 1;
+                return 0;
+            })
+            .slice(0, 10)
         : [];
 
     return (
@@ -245,7 +253,10 @@ const TriageModal = ({ visit, onClose, onSave, doctors = [], pharmacyStock = [],
                                                 <div key={s.id} onClick={() => addMedicine(s)} className="p-4 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors">
                                                     <div>
                                                         <div className="font-bold text-slate-900 text-sm">{s.name}</div>
-                                                        <div className="text-[10px] font-black text-slate-400 uppercase">Batch: {s.batch_no} | Stock: {s.qty_available}</div>
+                                                        <div className="text-[10px] font-black text-slate-400 uppercase">
+                                                            Batch: {s.batch_no} | Stock: {s.qty_available}
+                                                            {s.category === 'CASUALTY' && <span className="ml-2 text-amber-600 bg-amber-50 px-1 rounded">CASUALTY</span>}
+                                                        </div>
                                                     </div>
                                                     <Plus size={16} className="text-blue-600" />
                                                 </div>
@@ -704,7 +715,7 @@ const CasualtyPage = () => {
     const fetchMetadata = async () => {
         try {
             const [stock, svcs] = await Promise.all([
-                api.get('/pharmacy/stock/'),
+                api.get('/pharmacy/stock/?page_size=2000'), // increased limit to get more stock for filtering
                 api.get('/casualty/service-definitions/')
             ]);
             setPharmacyStock(stock.data.results || stock.data);

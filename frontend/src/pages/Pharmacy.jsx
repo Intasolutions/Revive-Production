@@ -93,6 +93,7 @@ const Pharmacy = () => {
     const [selectedStockItem, setSelectedStockItem] = useState(null);
     const [suppliers, setSuppliers] = useState([]);
     const [filterSupplier, setFilterSupplier] = useState('');
+    const [filterCategory, setFilterCategory] = useState('');
     const [inventorySearch, setInventorySearch] = useState(''); // New State
     const [editingStockId, setEditingStockId] = useState(null);
     const [editQty, setEditQty] = useState('');
@@ -145,6 +146,7 @@ const Pharmacy = () => {
     const [showManualPurchaseModal, setShowManualPurchaseModal] = useState(false);
     const [manualInvoice, setManualInvoice] = useState({
         supplier: '', supplier_invoice_no: '', invoice_date: new Date().toISOString().split('T')[0], purchase_type: 'CASH', items: [], gst_percent: 0,
+        category: 'PHARMACY',
         cash_discount: 0, courier_charge: 0 // New Extra Expenses
     });
     const medicineTypes = ['TABLET', 'SYRUP', 'DROP', 'INJECTION', 'GEL', 'CREAM', 'OINTMENT', 'POWDER', 'SPRAY', 'OTHER'];
@@ -169,12 +171,13 @@ const Pharmacy = () => {
                 url += `&page_size=${rowsPerPage}`;
             }
             if (filterSupplier) url += `&supplier=${filterSupplier}`;
+            if (filterCategory) url += `&category=${filterCategory}`;
             if (inventorySearch) url += `&search=${inventorySearch}`; // Add search param
             const { data } = await api.get(url);
             setStockData(data.results ? data : { results: data || [], count: data.length || 0 });
         } catch (err) { setStockData({ results: [], count: 0 }); }
         finally { if (showLoading) setLoading(false); }
-    }, [page, rowsPerPage, filterSupplier, inventorySearch]); // Add dependency
+    }, [page, rowsPerPage, filterSupplier, filterCategory, inventorySearch]); // Add dependency
 
     const fetchSuppliers = useCallback(async () => {
         try {
@@ -553,6 +556,17 @@ const Pharmacy = () => {
         }
     };
 
+    // Update Stock Category
+    const updateStockCategory = async (item, newCategory) => {
+        try {
+            await api.patch(`pharmacy/stock/${item.med_id || item.id}/`, { category: newCategory });
+            showToast('success', 'Category updated');
+            fetchStock(false);
+        } catch (err) {
+            showToast('error', 'Failed to update category');
+        }
+    };
+
     // Update Invoice Extras (Cash Discount, Courier)
     const updateInvoiceExtras = async (field, value) => {
         if (!selectedImport) return;
@@ -673,6 +687,11 @@ const Pharmacy = () => {
                                 onChange={(e) => setInventorySearch(e.target.value)}
                             />
                         </div>
+                        <select className="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none font-bold shadow-sm" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+                            <option value="">Filter: All Categories</option>
+                            <option value="PHARMACY">Pharmacy</option>
+                            <option value="CASUALTY">Casualty</option>
+                        </select>
                         <select className="bg-white border border-slate-200 text-slate-700 text-xs rounded-xl focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none font-bold shadow-sm" value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}>
                             <option value="">Filter: All Suppliers</option>
                             {suppliers.map(s => <option key={s.id} value={s.id}>{s.supplier_name}</option>)}
@@ -689,11 +708,24 @@ const Pharmacy = () => {
                     <>
                         <div className="flex-1 overflow-auto">
                             <table className="w-full text-left border-collapse">
-                                <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm"><tr>{['Drug Name', 'Type', 'Batch', 'Expiry', 'Total (Tab)', 'P.Rate', 'Sales Price/Tab', 'MRP', 'Action'].map(h => <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}</tr></thead>
+                                <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm"><tr>{['Drug Name', 'Category', 'Type', 'Batch', 'Expiry', 'Total (Tab)', 'P.Rate', 'Sales Price/Tab', 'MRP', 'Action'].map(h => <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>)}</tr></thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {(stockData?.results || []).map(s => (
                                         <tr key={s.med_id} className="hover:bg-slate-50 transition-colors group">
                                             <td className="px-6 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold"><Pill size={14} /></div><div><p className="font-bold text-slate-900 text-sm">{s.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{s.manufacturer || 'Generic'}</p></div></div></td>
+                                            <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
+                                                <div className="relative group/edit w-28">
+                                                    <select
+                                                        className={`w-full appearance-none font-bold text-[10px] uppercase rounded-lg px-2 py-1 pr-4 outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer border border-transparent hover:border-blue-200 ${s.category === 'CASUALTY' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}
+                                                        value={s.category || 'PHARMACY'}
+                                                        onChange={(e) => updateStockCategory(s, e.target.value)}
+                                                    >
+                                                        <option value="PHARMACY">Pharmacy</option>
+                                                        <option value="CASUALTY">Casualty</option>
+                                                    </select>
+                                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><Edit3 size={10} /></div>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
                                                 <div className="relative group/edit w-24">
                                                     <select
@@ -1299,6 +1331,18 @@ const Pharmacy = () => {
                                         >
                                             <option value="">Select Supplier...</option>
                                             {(Array.isArray(suppliers) ? suppliers : []).map(s => <option key={s.id} value={s.id}>{s.supplier_name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="h-8 w-px bg-slate-200"></div>
+                                    <div className="px-3">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Category</label>
+                                        <select
+                                            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold w-32 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                            value={manualInvoice.category}
+                                            onChange={(e) => setManualInvoice(prev => ({ ...prev, category: e.target.value }))}
+                                        >
+                                            <option value="PHARMACY">Pharmacy</option>
+                                            <option value="CASUALTY">Casualty</option>
                                         </select>
                                     </div>
                                     <div className="h-8 w-px bg-slate-200"></div>

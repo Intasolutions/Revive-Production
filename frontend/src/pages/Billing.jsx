@@ -691,7 +691,7 @@ const Billing = () => {
             </div>
 
             {/* --- Pending Queue (Always Visible) --- */}
-            <div className="mb-10">
+            <div className="mb-10 no-print">
                 <div className="flex items-center gap-2 mb-4 px-1">
                     <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg"><Sparkles size={16} /></div>
                     <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">Ready for Billing</h3>
@@ -750,7 +750,7 @@ const Billing = () => {
             </div>
 
             {/* --- Invoice List --- */}
-            <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden no-print">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide flex items-center gap-2">
                         <FileText size={16} className="text-slate-400" /> Recent Invoices
@@ -876,10 +876,9 @@ const Billing = () => {
             <AnimatePresence>
                 {showModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print-modal">
-                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white w-full max-w-7xl rounded-[2rem] shadow-2xl overflow-hidden print:overflow-visible flex flex-col h-[95vh] print:max-h-none print:h-auto print:rounded-none print:shadow-none">
-
-                            {/* Modal Header (Hide on Print) */}
-                            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center no-print">
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white w-full max-w-7xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col h-[95vh] no-print">
+                            {/* Modal Header */}
+                            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                                 <div>
                                     <h2 className="text-xl font-black text-slate-900 font-outfit uppercase tracking-tight">{formData.id ? 'Edit Invoice' : 'New Invoice'}</h2>
                                     <p className="text-xs text-slate-500 font-bold mt-1">Ref: {formData.id ? `#${formData.id.slice(0, 8)}` : 'Draft'}</p>
@@ -894,34 +893,14 @@ const Billing = () => {
                                 </div>
                             </div>
 
-                            {/* Modal Body (Printable Area) */}
-                            <div className="flex-1 overflow-y-auto print:overflow-visible p-8 bg-white print-content h-auto" id="invoice-print-area">
-
-                                <div className="flex flex-row justify-between items-start mb-8">
-                                    <div>
-                                        <h1 className="text-3xl font-black text-slate-900 tracking-widest uppercase">REVIVE HOSPITAL</h1>
-                                        <p className="text-xs font-bold text-slate-500 tracking-widest mt-1">HEALTH & RESEARCH CENTRE</p>
-                                        <div className="mt-4 text-xs text-slate-500 font-bold space-y-1">
-                                            <p>Anjukunnu</p>
-                                            <p>Ph: +91 8547299047</p>
-                                            <p>GST NO : 32DAYPG2657C1Z0</p>
-                                            <p className="text-[10px] uppercase tracking-wide border px-1 py-0.5 inline-block border-slate-300 rounded">COMPOSITION TAXABLE PERSON</p>
-                                            <p>DL NO : KL-WYD-159132 KL-WYD-159133</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-4xl font-black text-slate-200">INVOICE</div>
-                                        <p className="text-sm font-bold text-slate-900 mt-2">#{formData.id ? formData.id.slice(0, 8).toUpperCase() : 'DRAFT'}</p>
-                                        <p className="text-xs text-slate-500">{(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`; })()}</p>
-                                    </div>
-                                </div>
-
-                                {/* Patient Info Grid */}
+                            {/* Scrollable Form Area */}
+                            <div className="flex-1 overflow-y-auto p-8 bg-white">
+                                {/* Doctor/Patient Form Inputs - Keep existing interactive layout here */}
                                 <div className="grid grid-cols-2 gap-12 mb-12">
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Billed To</label>
                                         {!formData.id && (
-                                            <div className="relative mb-2 no-print">
+                                            <div className="relative mb-2">
                                                 <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
                                                     <Search size={14} className="text-slate-400" />
                                                     <input
@@ -950,22 +929,21 @@ const Billing = () => {
                                     </div>
                                 </div>
 
-                                {/* Items Table - Added overflow handling */}
-                                <div className="mb-12 overflow-x-auto print:overflow-visible">
-                                    <table className="w-full text-left text-sm min-w-[800px] print:min-w-full print:text-[10px]">
+                                {/* Interactive Items Table */}
+                                <div className="mb-12 overflow-x-auto">
+                                    <table className="w-full text-left text-sm min-w-[1000px]">
                                         <thead className="border-b-2 border-slate-900">
                                             <tr>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-8 print:w-6">#</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest min-w-[200px] print:min-w-0 print:w-auto">Description</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center print:w-12">HSN</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center print:w-12">MFR</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center print:w-16">Batch</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center print:w-16">Exp</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center print:w-10">Qty</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center print:w-10">GST%</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-right print:w-16">Price</th>
-                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-28 text-right print:w-20">Amount</th>
-                                                <th className="py-3 w-8 no-print"></th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-12">#</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest min-w-[250px]">Description</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-20 text-center">HSN</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center">Batch</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-center">Exp</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center">Qty</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-16 text-center">GST%</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-24 text-right">Price</th>
+                                                <th className="py-3 text-[10px] font-black text-slate-900 uppercase tracking-widest w-28 text-right">Amount</th>
+                                                <th className="py-3 w-8"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -973,9 +951,8 @@ const Billing = () => {
                                                 <tr key={idx} className="group">
                                                     <td className="py-4 text-slate-400 font-mono">{idx + 1}</td>
                                                     <td className="py-4 relative">
-                                                        <span className="print-only font-bold text-slate-700 text-sm whitespace-pre-wrap print-text-black">{item.description}</span>
                                                         <input
-                                                            className="w-full bg-transparent outline-none font-bold text-slate-700 placeholder:text-slate-300 print:hidden"
+                                                            className="w-full bg-transparent outline-none font-bold text-slate-700 placeholder:text-slate-300"
                                                             placeholder="Item Name / Service"
                                                             value={item.description}
                                                             onChange={(e) => {
@@ -992,7 +969,7 @@ const Billing = () => {
                                                             }}
                                                         />
                                                         {stockSearch.index === idx && filteredStock.length > 0 && (
-                                                            <div className="absolute top-full left-0 z-[60] w-[320px] bg-white border border-slate-200 rounded-xl shadow-2xl py-2 mt-1 no-print overflow-hidden">
+                                                            <div className="absolute top-full left-0 z-[60] w-[320px] bg-white border border-slate-200 rounded-xl shadow-2xl py-2 mt-1 overflow-hidden">
                                                                 {filteredStock.map(stock => (
                                                                     <button
                                                                         key={stock.med_id || stock.id}
@@ -1014,7 +991,6 @@ const Billing = () => {
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        {/* Backdrop to close dropdown */}
                                                         {stockSearch.index === idx && (
                                                             <div className="fixed inset-0 z-[50] pointer-events-auto" onClick={() => setStockSearch({ index: -1, term: "" })} />
                                                         )}
@@ -1023,18 +999,14 @@ const Billing = () => {
                                                         <span className="text-[10px] font-bold text-slate-600">{item.hsn}</span>
                                                     </td>
                                                     <td className="py-4 text-center">
-                                                        <span className="text-[10px] font-bold text-slate-600">{item.mfr}</span>
-                                                    </td>
-                                                    <td className="py-4 text-center">
                                                         <span className="text-[10px] font-bold text-slate-600">{item.batch}</span>
                                                     </td>
                                                     <td className="py-4 text-center">
                                                         <span className="text-[10px] font-bold text-slate-600">{item.expiry}</span>
                                                     </td>
                                                     <td className="py-4 text-center">
-                                                        <span className="print-only font-bold text-slate-700 print-text-black">{item.qty}</span>
                                                         <input
-                                                            type="number" className="w-full bg-transparent text-center font-bold outline-none print:hidden"
+                                                            type="number" className="w-full bg-transparent text-center font-bold outline-none"
                                                             value={item.qty}
                                                             onChange={(e) => {
                                                                 const qty = parseInt(e.target.value) || 0;
@@ -1045,9 +1017,8 @@ const Billing = () => {
                                                         />
                                                     </td>
                                                     <td className="py-4 text-center">
-                                                        <span className="print-only font-bold text-slate-500 print-text-black">{item.gst_percent}</span>
                                                         <input
-                                                            type="number" className="w-full bg-transparent text-center font-medium outline-none text-slate-500 print:hidden"
+                                                            type="number" className="w-full bg-transparent text-center font-medium outline-none text-slate-500"
                                                             value={item.gst_percent}
                                                             placeholder="0"
                                                             onChange={(e) => {
@@ -1059,9 +1030,8 @@ const Billing = () => {
                                                         />
                                                     </td>
                                                     <td className="py-4 text-right">
-                                                        <span className="print-only font-bold text-slate-700 print-text-black">{item.unit_price}</span>
                                                         <input
-                                                            type="number" className="w-full bg-transparent text-right font-medium outline-none print:hidden"
+                                                            type="number" className="w-full bg-transparent text-right font-medium outline-none"
                                                             value={item.unit_price}
                                                             onChange={(e) => {
                                                                 const price = parseFloat(e.target.value) || 0;
@@ -1072,22 +1042,20 @@ const Billing = () => {
                                                         />
                                                     </td>
                                                     <td className="py-4 text-right">
-                                                        <span className="print-only font-bold text-slate-900 print-text-black">{item.amount}</span>
                                                         <input
                                                             type="number"
-                                                            className="w-full bg-transparent text-right font-bold text-slate-900 outline-none placeholder:text-slate-300 print:hidden"
+                                                            className="w-full bg-transparent text-right font-bold text-slate-900 outline-none placeholder:text-slate-300"
                                                             value={item.amount}
                                                             onChange={(e) => {
                                                                 const newAmount = parseFloat(e.target.value) || 0;
                                                                 const newItems = [...formData.items];
-                                                                // Reverse calculate unit price if qty > 0
                                                                 const newUnitPrice = item.qty > 0 ? (newAmount / item.qty).toFixed(2) : 0;
                                                                 newItems[idx] = { ...item, amount: newAmount, unit_price: newUnitPrice };
                                                                 setFormData({ ...formData, items: newItems });
                                                             }}
                                                         />
                                                     </td>
-                                                    <td className="py-4 text-center no-print">
+                                                    <td className="py-4 text-center">
                                                         <button onClick={() => {
                                                             const newItems = formData.items.filter((_, i) => i !== idx);
                                                             setFormData({ ...formData, items: newItems });
@@ -1099,13 +1067,12 @@ const Billing = () => {
                                     </table>
                                     <button
                                         onClick={() => setFormData(prev => ({ ...prev, items: [...prev.items, { dept: "PHARMACY", description: "", qty: 1, unit_price: 0, amount: 0, dosage: "", duration: "", hsn: "", mfr: "", batch: "", expiry: "" }] }))}
-                                        className="mt-4 text-xs font-bold text-blue-600 hover:underline uppercase tracking-wide no-print flex items-center gap-1"
+                                        className="mt-4 text-xs font-bold text-blue-600 hover:underline uppercase tracking-wide flex items-center gap-1"
                                     >
                                         <Plus size={12} /> Add Item Line
                                     </button>
                                 </div>
 
-                                {/* Footer Totals */}
                                 <div className="flex justify-end">
                                     <div className="w-80 space-y-3">
                                         <div className="flex justify-between text-sm font-medium text-slate-500">
@@ -1118,21 +1085,10 @@ const Billing = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="mt-12 pt-8 border-t border-slate-200 flex justify-between items-end">
-                                    <div className="text-xs text-slate-500 max-w-sm">
-                                        <p className="font-bold uppercase tracking-wide mb-1">Declaration:</p>
-                                        <p>Certified that the medicines sold under this invoice are as per the prescription of a Registered Medical Practitioner.</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <div className="h-12 w-48 mb-2 mx-auto"></div>
-                                        <p className="text-sm font-bold text-slate-900">Pharmacist Sign</p>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature</p>
-                                    </div>
-                                </div>
                             </div>
 
-                            {/* Modal Footer (Actions) */}
-                            <div className="p-6 border-t border-slate-100 bg-slate-50/80 flex justify-between items-center no-print">
+                            {/* Modal Footer */}
+                            <div className="p-6 border-t border-slate-100 bg-slate-50/80 flex justify-between items-center">
                                 <div>
                                     <button onClick={() => handleImportPrescription()} disabled={!selectedPatientId} className={`text-xs font-bold flex items-center gap-2 ${selectedPatientId ? 'text-blue-600 hover:text-blue-800' : 'text-slate-300 cursor-not-allowed'}`}>
                                         <Import size={16} /> Import from Prescription
@@ -1146,6 +1102,106 @@ const Billing = () => {
                                 </div>
                             </div>
                         </motion.div>
+
+                        {/* --- DEDICATED PRINT VIEW (Only visible when printing) --- */}
+                        <div id="invoice-print-area" className="hidden print:block fixed inset-0 bg-white z-[9999] p-8">
+                            <div className="flex flex-col h-full justify-between">
+                                <div>
+                                    {/* Header */}
+                                    <div className="flex justify-between items-start mb-8 border-b-2 border-slate-900 pb-6">
+                                        <div>
+                                            <h1 className="text-3xl font-black text-slate-900 tracking-widest uppercase">REVIVE HOSPITAL</h1>
+                                            <p className="text-xs font-bold text-slate-500 tracking-widest mt-1">HEALTH & RESEARCH CENTRE</p>
+                                            <div className="mt-4 text-xs text-slate-600 font-bold space-y-1">
+                                                <p>Anjukunnu</p>
+                                                <p>Ph: +91 8547299047</p>
+                                                <p>GST NO : 32DAYPG2657C1Z0</p>
+                                                <p className="text-[10px] uppercase tracking-wide border px-1 py-0.5 inline-block border-slate-300 rounded">COMPOSITION TAXABLE PERSON</p>
+                                                <p>DL NO : KL-WYD-159132 KL-WYD-159133</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-4xl font-black text-slate-300">INVOICE</div>
+                                            <p className="text-sm font-bold text-slate-900 mt-2">#{formData.id ? formData.id.slice(0, 8).toUpperCase() : 'DRAFT'}</p>
+                                            <p className="text-xs text-slate-500">{(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`; })()}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Patient Information */}
+                                    <div className="flex justify-between mb-8">
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Billed To</label>
+                                            <div className="text-base font-bold text-slate-900">{formData.patient_name || "Unknown Patient"}</div>
+                                            <div className="text-xs text-slate-500">Reg No: {formData.registration_number || 'N/A'}</div>
+                                        </div>
+                                        <div className="text-right">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Doctor</label>
+                                            <div className="text-base font-bold text-slate-900">{formData.doctor_display_name || "Not Assigned"}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Items Table - Strict Layout with Borders */}
+                                    <table className="w-full text-left border-collapse border border-slate-900">
+                                        <thead>
+                                            <tr className="bg-slate-100">
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[5%] text-center">#</th>
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[35%]">Description</th>
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[10%] text-center">HSN</th>
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[10%] text-center">Batch</th>
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[8%] text-center">Exp</th>
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[7%] text-center">Qty</th>
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[7%] text-center">GST%</th>
+                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[9%] text-right">Price</th>
+                                                <th className="py-2 px-2 border-b border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[9%] text-right">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {formData.items.map((item, idx) => (
+                                                <tr key={idx} className="border-b border-slate-300">
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-medium text-slate-600 text-center">{idx + 1}</td>
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-bold text-slate-800 leading-tight">{item.description}</td>
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.hsn}</td>
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.batch}</td>
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.expiry}</td>
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-bold text-slate-800 text-center">{item.qty}</td>
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.gst_percent}</td>
+                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-800 text-right">{parseFloat(item.unit_price).toFixed(2)}</td>
+                                                    <td className="py-2 px-2 text-[10px] font-bold text-slate-900 text-right">{parseFloat(item.amount).toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                            {/* Empty rows to maintain height if needed, or just a footer row */}
+                                            <tr className="bg-slate-50 border-t-2 border-slate-900">
+                                                <td colSpan={8} className="py-3 px-2 text-right text-[10px] font-bold text-slate-600 border-r border-slate-900 uppercase tracking-wide">Total Amount</td>
+                                                <td className="py-3 px-2 text-right text-sm font-black text-slate-900">₹{Math.ceil(calculateSubtotal(formData.items)).toFixed(2)}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Footer */}
+                                <div>
+                                    <div className="flex flex-col items-center mt-8 pt-2">
+                                        <div className="text-[9px] text-slate-500 max-w-lg text-center leading-relaxed mb-8">
+                                            <p className="font-bold text-slate-800 uppercase tracking-wide mb-1">Terms & Conditions:</p>
+                                            <p>Goods once sold will not be taken back. Disputes if any subject to Anjukunnu jurisdiction.</p>
+                                        </div>
+
+                                        <div className="w-full flex justify-end px-12">
+                                            <div className="text-center">
+                                                <div className="h-12 w-40 border-b border-slate-400 mb-2 mx-auto"></div>
+                                                <p className="text-xs font-bold text-slate-900">For REVIVE HOSPITAL</p>
+                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Authorized Signatory</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-8 border-t border-dashed border-slate-300 pt-2 flex justify-between items-center px-8">
+                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Generated by Revive CMS</p>
+                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Thank You - Get Well Soon</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )
                 }

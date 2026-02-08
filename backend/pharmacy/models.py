@@ -40,6 +40,12 @@ class PurchaseInvoice(BaseModel):
     cash_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     courier_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
+    CATEGORY_CHOICES = (
+        ('PHARMACY', 'Pharmacy'),
+        ('CASUALTY', 'Casualty'),
+    )
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='PHARMACY')
+
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
     def calculate_total(self):
@@ -199,6 +205,12 @@ class PharmacyStock(BaseModel):
     hsn = models.CharField(max_length=20, blank=True)
     gst_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     manufacturer = models.CharField(max_length=255, blank=True)
+
+    CATEGORY_CHOICES = (
+        ('PHARMACY', 'Pharmacy'),
+        ('CASUALTY', 'Casualty'),
+    )
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='PHARMACY')
 
     tablets_per_strip = models.PositiveIntegerField(default=1)
 

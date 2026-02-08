@@ -174,6 +174,7 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                     'manufacturer': item.manufacturer,
                     'is_deleted': False,
                     'medicine_type': item.medicine_type,
+                    'category': invoice.category,
                 }
             )
 

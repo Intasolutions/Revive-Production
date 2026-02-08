@@ -300,6 +300,11 @@ class PharmacyStockViewSet(viewsets.ModelViewSet):
         supplier_id = self.request.query_params.get('supplier')
         if supplier_id:
             qs = qs.filter(supplier_id=supplier_id)
+        
+        category = self.request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+            
         return qs.order_by('expiry_date')
 
     @action(detail=False, methods=['get'], url_path='low-stock')
