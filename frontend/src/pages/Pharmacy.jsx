@@ -981,27 +981,27 @@ const Pharmacy = () => {
                                     </tbody>
                                 </table>
                             </div>
-                        </div>
-                        {/* Pagination Controls for Recent Imports */}
-                        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-500">
-                                Page {pageRecent} of {Math.ceil(totalRecentCount / 50) || 1} ({totalRecentCount} Total)
-                            </span>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => fetchRecentImports(Math.max(1, pageRecent - 1))}
-                                    disabled={pageRecent === 1}
-                                    className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                >
-                                    Prev
-                                </button>
-                                <button
-                                    onClick={() => fetchRecentImports(pageRecent + 1)}
-                                    disabled={pageRecent * 50 >= totalRecentCount}
-                                    className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                                >
-                                    Next
-                                </button>
+                            {/* Pagination Controls for Recent Imports */}
+                            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+                                <span className="text-xs font-bold text-slate-500">
+                                    Page {pageRecent} of {Math.ceil(totalRecentCount / 50) || 1} ({totalRecentCount} Total)
+                                </span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => fetchRecentImports(Math.max(1, pageRecent - 1))}
+                                        disabled={pageRecent === 1}
+                                        className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        Prev
+                                    </button>
+                                    <button
+                                        onClick={() => fetchRecentImports(pageRecent + 1)}
+                                        disabled={pageRecent * 50 >= totalRecentCount}
+                                        className="px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-lg hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
