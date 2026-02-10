@@ -1183,7 +1183,10 @@ const Billing = () => {
                                     <div className="flex flex-col items-center mt-8 pt-2">
                                         <div className="text-[9px] text-slate-500 max-w-lg text-center leading-relaxed mb-8">
                                             <p className="font-bold text-slate-800 uppercase tracking-wide mb-1">Terms & Conditions:</p>
-                                            <p>Goods once sold will not be taken back. Disputes if any subject to Anjukunnu jurisdiction.</p>
+                                            <p>Certified that the medicines sold as per this bill have been purchased local
+                                                from Registered Dealers who have certified in the related sales bills that such
+                                                medicines had duly suffered compound tax.
+                                                Wish You a Speedy Recovery.</p>
                                         </div>
 
                                         <div className="w-full flex justify-end px-12">

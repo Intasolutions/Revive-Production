@@ -60,11 +60,14 @@ body {
     #printable-area,
     #printable-area *,
     #invoice-print-area,
-    #invoice-print-area * {
+    #invoice-print-area *,
+    #print-portal,
+    #print-portal * {
         visibility: visible !important;
     }
 
     #printable-area,
+    #print-portal,
     #invoice-print-area {
         position: absolute !important;
         left: 0 !important;
@@ -96,7 +99,8 @@ body {
         /* Hide non-print scrollbars */
     }
 
-    #invoice-print-area {
+    #invoice-print-area,
+    #print-portal {
         position: absolute !important;
         left: 0 !important;
         top: 0 !important;
@@ -128,8 +132,8 @@ body {
         position: static !important;
     }
 
-    /* Hide everything else explicitly just in case */
-    body>*:not(#root) {
+    /* Hide everything else explicitly just in case, but keep our known print portals */
+    body>*:not(#root):not(#printable-area):not(#invoice-print-area):not(#print-portal) {
         display: none !important;
     }
 }

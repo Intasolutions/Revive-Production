@@ -750,9 +750,16 @@ const Laboratory = () => {
     const handleOpenPrintModal = async (groupOrCharge) => {
         // If it's a group, use it directly
         if (groupOrCharge.items) {
+            // Flatten any nested arrays in items
+            const flatItems = Array.isArray(groupOrCharge.items)
+                ? groupOrCharge.items.flat().filter(item => item && typeof item === 'object')
+                : [groupOrCharge.items];
+
+            const firstItem = flatItems[0] || groupOrCharge;
+
             setPrintCharge({
-                ...groupOrCharge.items[0], // Use first item for patient details
-                tests: groupOrCharge.items, // All tests in group
+                ...firstItem, // Use first item for patient details
+                tests: flatItems, // All tests in group (flattened)
                 isGroup: true,
                 groupStatus: groupOrCharge.status
             });
@@ -1979,57 +1986,67 @@ const Laboratory = () => {
 
             {/* Print View - PORTAL STRATEGY */}
             {
-                printCharge && createPortal(
+                showPrintModal && printCharge && createPortal(
                     <>
                         <style type="text/css">
                             {`
                         @media screen {
                             .print-portal-content {
-                                display: none;
+                                display: none !important;
                             }
                         }
                         @media print {
+                            @page {
+                                margin: 0.5in;
+                            }
+                            
                             html, body {
-                                height: 100% !important;
+                                height: auto !important;
                                 width: 100% !important;
                                 overflow: visible !important;
                                 margin: 0 !important;
                                 padding: 0 !important;
                                 background-color: white !important;
                             }
+                            
+                            /* Hide the main React app */
                             #root {
                                 display: none !important;
                             }
+                            
+                            /* Hide all direct body children except our portal */
+                            body > div:not([id*="print"]) {
+                                display: none !important;
+                            }
+                            
+                            /* Show only the print portal content */
                             .print-portal-content {
                                 display: block !important;
-                                position: absolute !important;
-                                top: 0 !important;
-                                left: 0 !important;
+                                position: relative !important;
                                 width: 100% !important;
-                                height: 100% !important;
-                                z-index: 9999 !important;
+                                height: auto !important;
                                 background-color: white !important;
                                 color: black !important;
-                                font-size: 10pt;
-                                padding: 24px !important;
+                                font-family: system-ui, -apple-system, sans-serif !important;
+                                padding: 0 !important;
                                 margin: 0 !important;
                                 visibility: visible !important;
                             }
+                            
                             .print-portal-content * {
                                 visibility: visible !important;
                             }
-                            /* Hide everything else explicitly just in case */
-                            body > *:not(.print-portal-content) {
-                                display: none !important;
-                            }
+                            
+                            /* Preserve colors */
                             * {
                                 -webkit-print-color-adjust: exact !important;
                                 print-color-adjust: exact !important;
+                                color-adjust: exact !important;
                             }
                         }
                         `}
                         </style>
-                        <div className="print-portal-content">
+                        <div id="print-portal" className="print-portal-content">
                             {/* Header */}
                             <div className="flex justify-between items-start mb-6 border-b-2 border-slate-900 pb-4">
                                 <div className="flex items-center gap-3">
