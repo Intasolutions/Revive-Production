@@ -389,9 +389,10 @@ class PharmacyStockViewSet(viewsets.ModelViewSet):
 
 
 class PurchaseInvoiceViewSet(viewsets.ModelViewSet):
-    queryset = PurchaseInvoice.objects.all().order_by('-invoice_date')
+    queryset = PurchaseInvoice.objects.all().order_by('-invoice_date', '-created_at')
     serializer_class = PurchaseInvoiceSerializer
     permission_classes = [IsPharmacyOrAdmin]
+    pagination_class = StandardResultsSetPagination
 
     def get_serializer_context(self):
         # needed so serializer can set created_by from request.user
