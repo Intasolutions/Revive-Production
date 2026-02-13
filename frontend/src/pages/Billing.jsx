@@ -181,7 +181,7 @@ const Billing = () => {
     };
 
     const filteredStock = stockSearch.term.length >= 2
-        ? pharmacyStock.filter(s => s.name.toLowerCase().includes(stockSearch.term.toLowerCase())).slice(0, 8)
+        ? pharmacyStock.filter(s => s.name.toLowerCase().includes(stockSearch.term.toLowerCase())).slice(0, 10)
         : [];
 
     // --- Logic ---
@@ -449,6 +449,28 @@ const Billing = () => {
     const handleCreateInvoice = async () => {
         if (isSubmitting) return; // Prevent double clicks
 
+        // --- Client Side Stock Validation ---
+        for (const item of formData.items) {
+            if (item.dept === 'PHARMACY' && !item.stock_deducted) {
+                // Find current stock in our local list
+                const stock = pharmacyStock.find(s =>
+                    s.name.toLowerCase() === item.description.toLowerCase() &&
+                    s.batch_no.toLowerCase() === (item.batch || "").toLowerCase()
+                );
+
+                if (stock) {
+                    if (stock.qty_available < item.qty) {
+                        return showToast('error', `Insufficient stock for ${item.description}. Available: ${stock.qty_available}, Requested: ${item.qty}`);
+                    }
+                } else if (item.qty > 0) {
+                    // If no stock record found at all but user typed a name manually
+                    // We should still allow it but maybe warn? 
+                    // Given the user's request, let's be strict.
+                    return showToast('error', `No stock record found for ${item.description}. Please select from the dropdown.`);
+                }
+            }
+        }
+
         setIsSubmitting(true);
         const subtotal = calculateSubtotal(formData.items);
         const invoiceData = {
@@ -467,7 +489,9 @@ const Billing = () => {
             fetchInvoices(); fetchStats(); fetchPendingVisits();
             showToast('success', "Invoice saved successfully!");
         } catch (err) {
-            showToast('error', "Failed to save invoice.");
+            console.error("Invoice save error:", err);
+            const errorMsg = err.response?.data?.error || err.response?.data?.detail || "Failed to save invoice.";
+            showToast('error', errorMsg);
         } finally {
             setIsSubmitting(false);
         }
@@ -636,9 +660,9 @@ const Billing = () => {
     };
 
     return (
-        <div className="p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen bg-[#F8FAFC] font-sans text-slate-900 relative print:p-0 print:m-0 print:min-h-0 print:bg-white print:overflow-visible">
+        <div className="p-6 md:p-8 max-w-[1600px] mx-auto min-h-screen bg-[#F8FAFC] font-sans text-slate-900 relative print:p-0 print:m-0 print:min-h-0 print:bg-white print:overflow-visible print:max-w-none">
 
-            <div className="no-print space-y-8">
+            <div className="no-print print:hidden space-y-8">
                 {/* --- Header --- */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
                     <div>
@@ -876,7 +900,7 @@ const Billing = () => {
             <AnimatePresence>
                 {showModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print-modal">
-                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white w-full max-w-7xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col h-[95vh] no-print">
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white w-full max-w-7xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col h-[95vh] no-print print:hidden">
                             {/* Modal Header */}
                             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                                 <div>
@@ -906,6 +930,7 @@ const Billing = () => {
                                                     <input
                                                         className="bg-transparent outline-none text-xs font-bold w-full"
                                                         placeholder="Search patient..."
+                                                        autoComplete="off"
                                                         onChange={(e) => {
                                                             const term = e.target.value.toLowerCase();
                                                             const found = patients.find(p => p.full_name?.toLowerCase().includes(term));
@@ -930,7 +955,7 @@ const Billing = () => {
                                 </div>
 
                                 {/* Interactive Items Table */}
-                                <div className="mb-12 overflow-x-auto">
+                                <div className="mb-12 overflow-visible min-h-[400px]">
                                     <table className="w-full text-left text-sm min-w-[1000px]">
                                         <thead className="border-b-2 border-slate-900">
                                             <tr>
@@ -950,41 +975,45 @@ const Billing = () => {
                                             {formData.items.map((item, idx) => (
                                                 <tr key={idx} className="group">
                                                     <td className="py-4 text-slate-400 font-mono">{idx + 1}</td>
-                                                    <td className="py-4 relative">
+                                                    <td className="py-4 relative" style={{ zIndex: stockSearch.index === idx ? 100 : 1 }}>
                                                         <input
                                                             className="w-full bg-transparent outline-none font-bold text-slate-700 placeholder:text-slate-300"
                                                             placeholder="Item Name / Service"
+                                                            autoComplete="off"
                                                             value={item.description}
                                                             onChange={(e) => {
                                                                 const val = e.target.value;
                                                                 const newItems = [...formData.items];
                                                                 newItems[idx].description = val;
                                                                 setFormData({ ...formData, items: newItems });
-                                                                setStockSearch({ index: idx, term: val });
+                                                                handleStockSearch(val, idx);
                                                             }}
                                                             onFocus={() => {
                                                                 if (item.description.length >= 2) {
-                                                                    setStockSearch({ index: idx, term: item.description });
+                                                                    handleStockSearch(item.description, idx);
                                                                 }
                                                             }}
                                                         />
-                                                        {stockSearch.index === idx && filteredStock.length > 0 && (
-                                                            <div className="absolute top-full left-0 z-[60] w-[320px] bg-white border border-slate-200 rounded-xl shadow-2xl py-2 mt-1 overflow-hidden">
-                                                                {filteredStock.map(stock => (
+                                                        {stockSearch.index === idx && stockSearch.results.length > 0 && (
+                                                            <div className="absolute top-full left-0 z-[100] w-[400px] bg-white border border-slate-200 rounded-xl shadow-2xl py-2 mt-2">
+                                                                {stockSearch.results.map(stock => (
                                                                     <button
                                                                         key={stock.med_id || stock.id}
+                                                                        disabled={stock.qty_available <= 0}
                                                                         onClick={() => handleSelectStock(stock, idx)}
-                                                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between group transition-colors"
+                                                                        className={`w-full text-left px-4 py-2 flex items-center justify-between group transition-colors ${stock.qty_available <= 0 ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-blue-50'}`}
                                                                     >
                                                                         <div>
-                                                                            <p className="text-sm font-bold text-slate-800">{stock.name}</p>
+                                                                            <p className={`text-sm font-bold ${stock.qty_available <= 0 ? 'text-slate-400' : 'text-slate-800'}`}>{stock.name}</p>
                                                                             <div className="flex items-center gap-2 mt-0.5">
                                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Batch: {stock.batch_no}</span>
-                                                                                <span className="text-[10px] font-bold text-emerald-500">{stock.qty_available} in stock</span>
+                                                                                <span className={`text-[10px] font-bold ${stock.qty_available <= 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                                                                    {stock.qty_available <= 0 ? 'Out of Stock' : `${stock.qty_available} in stock`}
+                                                                                </span>
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-right">
-                                                                            <p className="text-xs font-black text-slate-900 group-hover:text-blue-600 transition-colors">₹{(stock.selling_price / (stock.tablets_per_strip || 1)).toFixed(2)}</p>
+                                                                            <p className={`text-xs font-black ${stock.qty_available <= 0 ? 'text-slate-400' : 'text-slate-900 group-hover:text-blue-600'} transition-colors`}>₹{(stock.selling_price / (stock.tablets_per_strip || 1)).toFixed(2)}</p>
                                                                             <p className="text-[8px] font-bold text-slate-400">per unit</p>
                                                                         </div>
                                                                     </button>
@@ -992,7 +1021,7 @@ const Billing = () => {
                                                             </div>
                                                         )}
                                                         {stockSearch.index === idx && (
-                                                            <div className="fixed inset-0 z-[50] pointer-events-auto" onClick={() => setStockSearch({ index: -1, term: "" })} />
+                                                            <div className="fixed inset-0 z-[50] pointer-events-auto" onClick={() => setStockSearch({ index: -1, term: "", results: [] })} />
                                                         )}
                                                     </td>
                                                     <td className="py-4 text-center">
@@ -1103,112 +1132,113 @@ const Billing = () => {
                             </div>
                         </motion.div>
 
-                        {/* --- DEDICATED PRINT VIEW (Only visible when printing) --- */}
-                        <div id="invoice-print-area" className="hidden print:block fixed inset-0 bg-white z-[9999] p-8">
-                            <div className="flex flex-col h-full justify-between">
-                                <div>
-                                    {/* Header */}
-                                    <div className="flex justify-between items-start mb-8 border-b-2 border-slate-900 pb-6">
-                                        <div>
-                                            <h1 className="text-3xl font-black text-slate-900 tracking-widest uppercase">REVIVE HOSPITAL</h1>
-                                            <p className="text-xs font-bold text-slate-500 tracking-widest mt-1">HEALTH & RESEARCH CENTRE</p>
-                                            <div className="mt-4 text-xs text-slate-600 font-bold space-y-1">
-                                                <p>Anjukunnu</p>
-                                                <p>Ph: +91 8547299047</p>
-                                                <p>GST NO : 32DAYPG2657C1Z0</p>
-                                                <p className="text-[10px] uppercase tracking-wide border px-1 py-0.5 inline-block border-slate-300 rounded">COMPOSITION TAXABLE PERSON</p>
-                                                <p>DL NO : KL-WYD-159132 KL-WYD-159133</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-4xl font-black text-slate-300">INVOICE</div>
-                                            <p className="text-sm font-bold text-slate-900 mt-2">#{formData.id ? formData.id.slice(0, 8).toUpperCase() : 'DRAFT'}</p>
-                                            <p className="text-xs text-slate-500">{(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`; })()}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Patient Information */}
-                                    <div className="flex justify-between mb-8">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Billed To</label>
-                                            <div className="text-base font-bold text-slate-900">{formData.patient_name || "Unknown Patient"}</div>
-                                            <div className="text-xs text-slate-500">Reg No: {formData.registration_number || 'N/A'}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Doctor</label>
-                                            <div className="text-base font-bold text-slate-900">{formData.doctor_display_name || "Not Assigned"}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Items Table - Strict Layout with Borders */}
-                                    <table className="w-full text-left border-collapse border border-slate-900">
-                                        <thead>
-                                            <tr className="bg-slate-100">
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[5%] text-center">#</th>
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[35%]">Description</th>
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[10%] text-center">HSN</th>
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[10%] text-center">Batch</th>
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[8%] text-center">Exp</th>
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[7%] text-center">Qty</th>
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[7%] text-center">GST%</th>
-                                                <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[9%] text-right">Price</th>
-                                                <th className="py-2 px-2 border-b border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[9%] text-right">Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {formData.items.map((item, idx) => (
-                                                <tr key={idx} className="border-b border-slate-300">
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-medium text-slate-600 text-center">{idx + 1}</td>
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-bold text-slate-800 leading-tight">{item.description}</td>
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.hsn}</td>
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.batch}</td>
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.expiry}</td>
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-bold text-slate-800 text-center">{item.qty}</td>
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.gst_percent}</td>
-                                                    <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-800 text-right">{parseFloat(item.unit_price).toFixed(2)}</td>
-                                                    <td className="py-2 px-2 text-[10px] font-bold text-slate-900 text-right">{parseFloat(item.amount).toFixed(2)}</td>
-                                                </tr>
-                                            ))}
-                                            {/* Empty rows to maintain height if needed, or just a footer row */}
-                                            <tr className="bg-slate-50 border-t-2 border-slate-900">
-                                                <td colSpan={8} className="py-3 px-2 text-right text-[10px] font-bold text-slate-600 border-r border-slate-900 uppercase tracking-wide">Total Amount</td>
-                                                <td className="py-3 px-2 text-right text-sm font-black text-slate-900">₹{Math.ceil(calculateSubtotal(formData.items)).toFixed(2)}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {/* Footer */}
-                                <div>
-                                    <div className="flex flex-col items-center mt-8 pt-2">
-                                        <div className="text-[9px] text-slate-500 max-w-lg text-center leading-relaxed mb-8">
-                                            <p className="font-bold text-slate-800 uppercase tracking-wide mb-1">Terms & Conditions:</p>
-                                            <p>Certified that the medicines sold as per this bill have been purchased local
-                                                from Registered Dealers who have certified in the related sales bills that such
-                                                medicines had duly suffered compound tax.
-                                                Wish You a Speedy Recovery.</p>
-                                        </div>
-
-                                        <div className="w-full flex justify-end px-12">
-                                            <div className="text-center">
-                                                <div className="h-12 w-40 border-b border-slate-400 mb-2 mx-auto"></div>
-                                                <p className="text-xs font-bold text-slate-900">For REVIVE HOSPITAL</p>
-                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Authorized Signatory</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-8 border-t border-dashed border-slate-300 pt-2 flex justify-between items-center px-8">
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Generated by Revive CMS</p>
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Thank You - Get Well Soon</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 )
                 }
             </AnimatePresence >
+
+            {/* --- DEDICATED PRINT VIEW (Moved outside modal, visible only on print) --- */}
+            <div id="invoice-print-area" className="hidden print:block absolute top-0 left-0 w-full h-auto bg-white z-[9999] p-8">
+                <div className="flex flex-col h-full justify-between min-h-screen">
+                    <div>
+                        {/* Header */}
+                        <div className="flex justify-between items-start mb-8 border-b-2 border-slate-900 pb-6">
+                            <div>
+                                <h1 className="text-3xl font-black text-slate-900 tracking-widest uppercase">REVIVE HOSPITAL</h1>
+                                <p className="text-xs font-bold text-slate-500 tracking-widest mt-1">HEALTH & RESEARCH CENTRE</p>
+                                <div className="mt-4 text-xs text-slate-600 font-bold space-y-1">
+                                    <p>Anjukunnu</p>
+                                    <p>Ph: +91 8547299047</p>
+                                    <p>GST NO : 32DAYPG2657C1Z0</p>
+                                    <p className="text-[10px] uppercase tracking-wide border px-1 py-0.5 inline-block border-slate-300 rounded">COMPOSITION TAXABLE PERSON</p>
+                                    <p>DL NO : KL-WYD-159132 KL-WYD-159133</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-4xl font-black text-slate-300">INVOICE</div>
+                                <p className="text-sm font-bold text-slate-900 mt-2">#{formData.id ? formData.id.slice(0, 8).toUpperCase() : 'DRAFT'}</p>
+                                <p className="text-xs text-slate-500">{(() => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`; })()}</p>
+                            </div>
+                        </div>
+
+                        {/* Patient Information */}
+                        <div className="flex justify-between mb-8">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Billed To</label>
+                                <div className="text-base font-bold text-slate-900">{formData.patient_name || "Unknown Patient"}</div>
+                                <div className="text-xs text-slate-500">Reg No: {formData.registration_number || 'N/A'}</div>
+                            </div>
+                            <div className="text-right">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Doctor</label>
+                                <div className="text-base font-bold text-slate-900">{formData.doctor_display_name || "Not Assigned"}</div>
+                            </div>
+                        </div>
+
+                        {/* Items Table - Strict Layout with Borders */}
+                        <table className="w-full text-left border-collapse border border-slate-900">
+                            <thead>
+                                <tr className="bg-slate-100">
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[5%] text-center">#</th>
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[35%]">Description</th>
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[10%] text-center">HSN</th>
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[10%] text-center">Batch</th>
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[8%] text-center">Exp</th>
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[7%] text-center">Qty</th>
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[7%] text-center">GST%</th>
+                                    <th className="py-2 px-2 border-b border-r border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[9%] text-right">Price</th>
+                                    <th className="py-2 px-2 border-b border-slate-900 text-[9px] font-black text-slate-900 uppercase tracking-widest w-[9%] text-right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {formData.items.map((item, idx) => (
+                                    <tr key={idx} className="border-b border-slate-300">
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-medium text-slate-600 text-center">{idx + 1}</td>
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-bold text-slate-800 leading-tight">{item.description}</td>
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.hsn}</td>
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.batch}</td>
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.expiry}</td>
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] font-bold text-slate-800 text-center">{item.qty}</td>
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-600 text-center">{item.gst_percent}</td>
+                                        <td className="py-2 px-2 border-r border-slate-300 text-[10px] text-slate-800 text-right">{parseFloat(item.unit_price).toFixed(2)}</td>
+                                        <td className="py-2 px-2 text-[10px] font-bold text-slate-900 text-right">{parseFloat(item.amount).toFixed(2)}</td>
+                                    </tr>
+                                ))}
+                                {/* Empty rows to maintain height if needed, or just a footer row */}
+                                <tr className="bg-slate-50 border-t-2 border-slate-900">
+                                    <td colSpan={8} className="py-3 px-2 text-right text-[10px] font-bold text-slate-600 border-r border-slate-900 uppercase tracking-wide">Total Amount</td>
+                                    <td className="py-3 px-2 text-right text-sm font-black text-slate-900">₹{Math.ceil(calculateSubtotal(formData.items)).toFixed(2)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Footer */}
+                    <div>
+                        <div className="flex flex-col items-center mt-8 pt-2">
+                            <div className="text-[9px] text-slate-500 max-w-lg text-center leading-relaxed mb-8">
+                                <p className="font-bold text-slate-800 uppercase tracking-wide mb-1">Terms & Conditions:</p>
+                                <p>Certified that the medicines sold as per this bill have been purchased local
+                                    from Registered Dealers who have certified in the related sales bills that such
+                                    medicines had duly suffered compound tax.
+                                    Wish You a Speedy Recovery.</p>
+                            </div>
+
+                            <div className="w-full flex justify-end px-12">
+                                <div className="text-center">
+                                    <div className="h-12 w-40 border-b border-slate-400 mb-2 mx-auto"></div>
+                                    <p className="text-xs font-bold text-slate-900">For REVIVE HOSPITAL</p>
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Authorized Signatory</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 border-t border-dashed border-slate-300 pt-2 flex justify-between items-center px-8">
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Generated by Revive CMS</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Thank You - Get Well Soon</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* --- Payment Modal --- */}
             < AnimatePresence >

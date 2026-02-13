@@ -85,33 +85,32 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
+        old_status = instance.status # Track original status
         
-        # Update fields
+        # Update header fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
         if items_data is not None:
-             # Logic for updating items (Full replace for simplicity in drafts)
-             # If status was already COMPLETED, blocking edits is safer, but for now we assume draft edits.
-             if instance.status == 'DRAFT':
-                 instance.items.all().delete()
-                 total_amount = 0
-                 for item in items_data:
-                    PurchaseItem.objects.create(purchase=instance, **item)
-                 
-                 # Recalculate everything
-                 instance.calculate_distribution()
-                 instance.refresh_from_db()
+             # Logic for updating items
+             # IF status was already COMPLETED, we must reverse the old stock contribution before replacing items
+             if old_status == 'COMPLETED':
+                 self._reverse_stock_for_invoice(instance)
+
+             # Now delete and recreate items (Works for both DRAFT and COMPLETED now)
+             instance.items.all().delete()
+             for item in items_data:
+                PurchaseItem.objects.create(purchase=instance, **item)
+             
+             # Recalculate everything (GST, Discounts)
+             instance.calculate_distribution()
+             instance.refresh_from_db()
 
         instance.save()
 
-        # If transitioning to COMPLETED (or initially saving as COMPLETED if update allowed on final)
-        # Note: Frontend sends status='COMPLETED' to finalize.
+        # IF transitioning to COMPLETED (from Draft) OR staying COMPLETED (after edit)
+        # Apply the new stock contribution
         if instance.status == 'COMPLETED':
-             # Re-fetch items if we didn't just replace them, to be safe
-             # But items_data is expected to be passed if editing. 
-             # If finalizing without editing items, we need to fetch them.
-             
              self._process_stock_for_invoice(instance)
 
         # Emit Socket
@@ -210,6 +209,37 @@ class PurchaseInvoiceSerializer(serializers.ModelSerializer):
                     ).delete()
             except Exception as e:
                 print(f"Failed to clear notifications: {e}")
+
+    def _reverse_stock_for_invoice(self, invoice):
+        """
+        Subtracts the quantities of all items in the invoice from PharmacyStock.
+        Used before replacing items in a COMPLETED invoice edit.
+        """
+        for item in invoice.items.all():
+            tps = item.tablets_per_strip
+            qty_to_subtract = (item.qty + item.free_qty) * tps
+            
+            try:
+                # Use select_for_update to handle concurrency in production
+                stock = PharmacyStock.objects.select_for_update().get(
+                    name=item.product_name,
+                    batch_no=item.batch_no
+                )
+                
+                # Safety check: Prevent negative stock (indicates items already sold)
+                if stock.qty_available < qty_to_subtract:
+                    raise serializers.ValidationError(
+                        f"CRITICAL: Cannot edit invoice. {item.product_name} (Batch: {item.batch_no}) "
+                        f"has already been partially sold. Current stock: {stock.qty_available}, "
+                        f"needed to reverse: {qty_to_subtract}. Edit would cause negative inventory."
+                    )
+                
+                stock.qty_available -= qty_to_subtract
+                stock.save()
+            except PharmacyStock.DoesNotExist:
+                # If stock record was manually deleted or renamed, we skip reversal to avoid crash
+                # but might need to log this in a real prod env.
+                pass
 
 
 class PharmacySaleItemSerializer(serializers.ModelSerializer):

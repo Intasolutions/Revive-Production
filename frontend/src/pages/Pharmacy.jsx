@@ -1184,11 +1184,14 @@ const Pharmacy = () => {
                                             )}
                                         </div></div>
                                 </div>
-                                {selectedImport.status === 'DRAFT' && (
+                                {['DRAFT', 'COMPLETED'].includes(selectedImport.status) && (
                                     <div className="mt-6 flex justify-end">
                                         <button
                                             onClick={() => {
-                                                // Resume Draft
+                                                if (selectedImport.status === 'COMPLETED' && !window.confirm("WARNING: This is a verified invoice. Editing it will automatically adjust live stock. If items have already been sold, reduction may fail. Continue?")) {
+                                                    return;
+                                                }
+                                                // Resume Draft / Edit Completed
                                                 setManualInvoice({
                                                     id: selectedImport.id,
                                                     supplier: selectedImport.supplier,
@@ -1197,23 +1200,23 @@ const Pharmacy = () => {
                                                     purchase_type: selectedImport.purchase_type,
                                                     cash_discount: parseFloat(selectedImport.cash_discount) || 0,
                                                     courier_charge: parseFloat(selectedImport.courier_charge) || 0,
+                                                    category: selectedImport.category || 'PHARMACY',
                                                     // Flatten items back to manual entry format
                                                     items: selectedImport.items_detail.map(d => ({
                                                         ...d,
                                                         // Ensure numeric types match manual entry expectations
-                                                        qty: d.qty, // Already strips in DB? Wait, let's check PurchaseItemSerializer. 
-                                                        // No, DB has 'qty' which is Strips. Perfect.
-                                                        // But let's verify if 'items_detail' from serializer is fully populated.
-                                                        // Yes, PurchaseInvoiceSerializer has items_detail = PurchaseItemSerializer(many=True)
+                                                        qty: d.qty,
+                                                        gst_percent: parseFloat(d.gst_percent).toString(),
+                                                        discount_percent: parseFloat(d.discount_percent || 0).toString(),
                                                         selling_price_per_tab: (parseFloat(d.selling_price) / (d.tablets_per_strip || 1)).toFixed(2)
                                                     }))
                                                 });
                                                 setSelectedImport(null);
                                                 setShowManualPurchaseModal(true);
                                             }}
-                                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 uppercase tracking-widest text-xs flex items-center gap-2"
+                                            className={`px-6 py-3 rounded-xl font-bold shadow-lg uppercase tracking-widest text-xs flex items-center gap-2 ${selectedImport.status === 'COMPLETED' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'} text-white transition-all`}
                                         >
-                                            <Edit3 size={16} /> Resume & Edit Draft
+                                            <Edit3 size={16} /> {selectedImport.status === 'DRAFT' ? 'Resume & Edit Draft' : 'Edit Verified Invoice'}
                                         </button>
                                     </div>
                                 )}
@@ -1222,8 +1225,8 @@ const Pharmacy = () => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-white sticky top-0 shadow-sm">
                                         <tr>
-                                            {['Product', 'Mfg', 'Batch', 'Exp', 'Pack', 'HSN', 'Qty', 'Free', 'MRP', 'PTR', 'Disc%', 'TaxPerc', 'Amount'].map(h => (
-                                                <th key={h} className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 whitespace-nowrap">{h}</th>
+                                            {['Product', 'Mfg', 'Batch', 'Exp', 'Pack', 'HSN', 'Qty', 'Free', 'MRP', 'PTR', 'Disc%', 'TaxPerc', 'Amount'].map((h, i) => (
+                                                <th key={h} className={`px-4 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b-2 border-slate-300 whitespace-nowrap ${i === 0 ? 'border-l-2' : ''} border-r-2 border-slate-300`}>{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
@@ -1236,20 +1239,20 @@ const Pharmacy = () => {
                                             const totalItemAmount = taxableAmount + gstAmount;
 
                                             return (
-                                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="px-4 py-3 font-bold text-sm text-slate-900 max-w-[200px] truncate" title={item.product_name}>{item.product_name}</td>
-                                                    <td className="px-4 py-3 text-xs text-slate-500 max-w-[100px] truncate" title={item.manufacturer}>{item.manufacturer || '-'}</td>
-                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{item.batch_no}</td>
-                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{item.expiry_date}</td>
-                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 text-center">{item.tablets_per_strip || 1}</td>
-                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{item.hsn || '-'}</td>
-                                                    <td className="px-4 py-3 font-bold text-emerald-600">{item.qty}</td>
-                                                    <td className="px-4 py-3 font-medium text-emerald-500">{item.free_qty > 0 ? `+${item.free_qty}` : '-'}</td>
-                                                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">₹{item.mrp}</td>
-                                                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">₹{item.ptr}</td>
-                                                    <td className="px-4 py-3 text-sm text-rose-500 font-bold whitespace-nowrap text-center">{item.discount_percent > 0 ? `${item.discount_percent}%` : '-'}</td>
-                                                    <td className="px-4 py-3 text-sm text-blue-600 font-bold whitespace-nowrap text-center">{item.gst_percent || 0}%</td>
-                                                    <td className="px-4 py-3 font-black text-slate-900 whitespace-nowrap">₹{taxableAmount.toFixed(2)}</td>
+                                                <tr key={idx} className="hover:bg-slate-50 transition-colors border-b border-slate-300">
+                                                    <td className="px-4 py-3 font-bold text-sm text-slate-900 border-l-2 border-r-2 border-slate-300 max-w-[200px] truncate" title={item.product_name}>{item.product_name}</td>
+                                                    <td className="px-4 py-3 text-xs text-slate-500 border-r-2 border-slate-300 max-w-[100px] truncate" title={item.manufacturer}>{item.manufacturer || '-'}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 border-r-2 border-slate-300">{item.batch_no}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap border-r-2 border-slate-300">{item.expiry_date}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 text-center border-r-2 border-slate-300">{item.tablets_per_strip || 1}</td>
+                                                    <td className="px-4 py-3 font-mono text-xs text-slate-600 border-r-2 border-slate-300">{item.hsn || '-'}</td>
+                                                    <td className="px-4 py-3 font-bold text-emerald-600 text-center border-r-2 border-slate-300">{item.qty}</td>
+                                                    <td className="px-4 py-3 font-medium text-emerald-500 text-center border-r-2 border-slate-300">{item.free_qty > 0 ? `+${item.free_qty}` : '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap border-r-2 border-slate-300">₹{item.mrp}</td>
+                                                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap border-r-2 border-slate-300">₹{item.ptr}</td>
+                                                    <td className="px-4 py-3 text-sm text-rose-500 font-bold whitespace-nowrap text-center border-r-2 border-slate-300">{item.discount_percent > 0 ? `${item.discount_percent}%` : '-'}</td>
+                                                    <td className="px-4 py-3 text-sm text-blue-600 font-bold whitespace-nowrap text-center border-r-2 border-slate-300">{item.gst_percent || 0}%</td>
+                                                    <td className="px-4 py-3 font-black text-slate-900 whitespace-nowrap border-r-2 border-slate-300">₹{totalItemAmount.toFixed(2)}</td>
                                                 </tr>
                                             );
                                         })}
@@ -1442,19 +1445,19 @@ const Pharmacy = () => {
                                     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-40">
                                         <table className="w-full text-left">
                                             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
-                                                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    <th className="px-4 py-4 w-[15%]">Product Details</th>
-                                                    <th className="px-4 py-4 w-[8%]">Type</th>
-                                                    <th className="px-4 py-4 w-[10%]">Batch Info</th>
-                                                    <th className="px-4 py-4 w-[5%] text-center">TPS</th>
-                                                    <th className="px-4 py-4 w-[8%] text-center">Qty (Str)</th>
-                                                    <th className="px-4 py-4 w-[5%] text-center">Free</th>
-                                                    <th className="px-4 py-4 w-[10%] text-right">P.Rate (Str)</th>
-                                                    <th className="px-4 py-4 w-[6%] text-center">Disc%</th>
-                                                    <th className="px-4 py-4 w-[6%] text-center">GST%</th>
-                                                    <th className="px-4 py-4 w-[10%] text-right">MRP (Str)</th>
-                                                    <th className="px-4 py-4 w-[10%] text-right bg-slate-100/50">Total</th>
-                                                    <th className="px-4 py-4 w-[5%] text-center"></th>
+                                                <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                    <th className="px-4 py-4 w-[12%] border-l-2 border-r-2 border-slate-300">Product</th>
+                                                    <th className="px-4 py-4 w-[8%] border-r-2 border-slate-300">Type</th>
+                                                    <th className="px-4 py-4 w-[10%] border-r-2 border-slate-300">Batch Info</th>
+                                                    <th className="px-4 py-4 w-[5%] text-center border-r-2 border-slate-300">TPS</th>
+                                                    <th className="px-4 py-4 w-[8%] text-center border-r-2 border-slate-300">Qty (Str)</th>
+                                                    <th className="px-4 py-4 w-[5%] text-center border-r-2 border-slate-300">Free</th>
+                                                    <th className="px-4 py-4 w-[10%] text-right border-r-2 border-slate-300">P.Rate (Str)</th>
+                                                    <th className="px-4 py-4 w-[6%] text-center border-r-2 border-slate-300">Disc%</th>
+                                                    <th className="px-4 py-4 w-[6%] text-center border-r-2 border-slate-300">GST%</th>
+                                                    <th className="px-4 py-4 w-[10%] text-right border-r-2 border-slate-300">MRP (Str)</th>
+                                                    <th className="px-4 py-4 w-[10%] text-right bg-slate-100/50 border-r-2 border-slate-300">Total</th>
+                                                    <th className="px-4 py-4 w-[5%] text-center border-r-2 border-slate-300"></th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
@@ -1466,9 +1469,9 @@ const Pharmacy = () => {
                                                     const rowTotal = (base - disc + gst).toFixed(2);
 
                                                     return (
-                                                        <tr key={idx} className="group hover:bg-blue-50/30 transition-colors">
+                                                        <tr key={idx} className="group hover:bg-blue-50/30 transition-colors border-b border-slate-300">
                                                             {/* Product Name */}
-                                                            <td className="px-4 py-3 relative align-top">
+                                                            <td className="px-4 py-3 relative align-top border-l-2 border-r-2 border-slate-300">
                                                                 <div className="space-y-1">
                                                                     <input
                                                                         className="w-full bg-transparent text-sm font-bold text-slate-900 placeholder:text-slate-300 outline-none border-b border-transparent focus:border-blue-500 pb-1"
@@ -1507,7 +1510,7 @@ const Pharmacy = () => {
                                                             </td>
 
                                                             {/* Type */}
-                                                            <td className="px-4 py-3 align-top">
+                                                            <td className="px-4 py-3 align-top border-r-2 border-slate-300">
                                                                 <select
                                                                     className="w-full bg-slate-50 text-[10px] font-bold text-slate-700 rounded px-1 py-1 outline-none uppercase"
                                                                     value={item.medicine_type || 'TABLET'}
@@ -1518,7 +1521,7 @@ const Pharmacy = () => {
                                                             </td>
 
                                                             {/* Batch & Expiry */}
-                                                            <td className="px-4 py-3 align-top">
+                                                            <td className="px-4 py-3 align-top border-r-2 border-slate-300">
                                                                 <div className="space-y-1">
                                                                     <input className="w-full bg-slate-50 rounded px-2 py-1 text-xs font-mono font-bold text-slate-700 outline-none focus:ring-1 focus:ring-blue-500" placeholder="BATCH" value={item.batch_no} onChange={(e) => handleManualItemChange(idx, 'batch_no', e.target.value)} />
                                                                     <input className="w-full bg-transparent px-1 text-[10px] font-bold text-slate-500 outline-none" type="date" value={item.expiry_date} onChange={(e) => handleManualItemChange(idx, 'expiry_date', e.target.value)} />
@@ -1526,24 +1529,24 @@ const Pharmacy = () => {
                                                             </td>
 
                                                             {/* TPS */}
-                                                            <td className="px-4 py-3 align-top">
+                                                            <td className="px-4 py-3 align-top border-r-2 border-slate-300">
                                                                 <input className="w-full bg-transparent text-center text-xs font-bold text-slate-600 outline-none border-b border-slate-100 focus:border-blue-500 pb-1" type="number" value={item.tablets_per_strip} onChange={(e) => handleManualItemChange(idx, 'tablets_per_strip', parseInt(e.target.value) || 1)} />
                                                             </td>
 
                                                             {/* Qty */}
-                                                            <td className="px-4 py-3 align-top">
+                                                            <td className="px-4 py-3 align-top border-r-2 border-slate-300">
                                                                 <div className="flex items-center justify-center">
                                                                     <input className="w-16 bg-blue-50/50 rounded-lg py-1.5 text-center text-sm font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500/50 transition-all" type="number" placeholder="0" value={item.qty} onChange={(e) => handleManualItemChange(idx, 'qty', e.target.value)} />
                                                                 </div>
                                                             </td>
 
                                                             {/* Free */}
-                                                            <td className="px-4 py-3 align-top">
+                                                            <td className="px-4 py-3 align-top border-r-2 border-slate-300">
                                                                 <input className="w-full bg-transparent text-center text-xs font-bold text-slate-400 focus:text-emerald-600 outline-none border-b border-transparent focus:border-emerald-500 pb-1 transition-colors" type="number" placeholder="0" value={item.free_qty} onChange={(e) => handleManualItemChange(idx, 'free_qty', e.target.value)} />
                                                             </td>
 
                                                             {/* Rate */}
-                                                            <td className="px-4 py-3 align-top text-right">
+                                                            <td className="px-4 py-3 align-top text-right border-r-2 border-slate-300">
                                                                 <div className="flex items-center justify-end gap-1">
                                                                     <span className="text-xs text-slate-400">₹</span>
                                                                     <input className="w-20 bg-transparent text-right text-sm font-bold text-slate-900 outline-none border-b border-slate-100 focus:border-blue-500 pb-1" type="number" step="0.01" value={item.purchase_rate} onChange={(e) => handleManualItemChange(idx, 'purchase_rate', e.target.value)} />
@@ -1552,12 +1555,12 @@ const Pharmacy = () => {
                                                             </td>
 
                                                             {/* Disc */}
-                                                            <td className="px-4 py-3 align-top">
+                                                            <td className="px-4 py-3 align-top border-r-2 border-slate-300">
                                                                 <input className="w-full bg-transparent text-center text-xs font-bold text-rose-500 outline-none border-b border-transparent focus:border-rose-500 pb-1" type="number" placeholder="0" value={item.discount_percent || ''} onChange={(e) => handleManualItemChange(idx, 'discount_percent', e.target.value)} />
                                                             </td>
 
                                                             {/* GST */}
-                                                            <td className="px-4 py-3 align-top">
+                                                            <td className="px-4 py-3 align-top border-r-2 border-slate-300">
                                                                 <select
                                                                     className="w-full bg-transparent text-center text-xs font-bold text-slate-600 outline-none appearance-none"
                                                                     value={item.gst_percent}
@@ -1572,18 +1575,18 @@ const Pharmacy = () => {
                                                             </td>
 
                                                             {/* MRP */}
-                                                            <td className="px-4 py-3 align-top text-right">
+                                                            <td className="px-4 py-3 align-top text-right border-r-2 border-slate-300">
                                                                 <input className="w-full bg-transparent text-right text-xs font-bold text-slate-600 outline-none border-b border-transparent focus:border-slate-400 pb-1" type="number" step="0.01" value={item.mrp} onChange={(e) => handleManualItemChange(idx, 'mrp', e.target.value)} />
                                                                 <p className="text-[9px] text-slate-400 mt-1">MRP/Tab: ₹{((parseFloat(item.mrp) || 0) / (parseInt(item.tablets_per_strip) || 1)).toFixed(2)}</p>
                                                             </td>
 
                                                             {/* Row Total */}
-                                                            <td className="px-4 py-3 align-top text-right bg-slate-100/30">
+                                                            <td className="px-4 py-3 align-top text-right bg-slate-100/30 border-r-2 border-slate-300">
                                                                 <span className="text-xs font-black text-slate-900">₹{rowTotal}</span>
                                                             </td>
 
                                                             {/* Action */}
-                                                            <td className="px-4 py-3 align-top text-center">
+                                                            <td className="px-4 py-3 align-top text-center border-r-2 border-slate-300">
                                                                 <button onClick={() => removeManualItem(idx)} className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all">
                                                                     <Trash2 size={14} />
                                                                 </button>

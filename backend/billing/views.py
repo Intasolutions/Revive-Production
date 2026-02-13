@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import transaction, models
 from django.db.models import Sum, F
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -32,6 +33,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 
         return queryset
 
+    @transaction.atomic
     def perform_create(self, serializer):
         invoice = serializer.save()
         self._deduct_stock(invoice)
@@ -40,14 +42,17 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if invoice.visit:
             visit = invoice.visit
             visit.status = 'CLOSED'
-            # visit.assigned_role = 'DOCTOR' # Optional: Reset role or leave as BILLING but status CLOSED hides it
             visit.save()
 
+    @transaction.atomic
     def perform_update(self, serializer):
         invoice = serializer.save()
         self._deduct_stock(invoice)
 
     def _deduct_stock(self, invoice):
+        from django.db import transaction
+        from rest_framework import serializers
+
         items = invoice.items.all()
         for item in items:
             if item.dept == 'PHARMACY':
@@ -63,21 +68,41 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 # Find Stock
                 stock = None
                 if batch:
-                    stock = PharmacyStock.objects.filter(name__iexact=name, batch_no__iexact=batch).first()
-                if not stock:
-                    stock = PharmacyStock.objects.filter(name__iexact=name).first()
+                    # Strict match by name and batch
+                    stock = PharmacyStock.objects.select_for_update().filter(
+                        name__iexact=name, 
+                        batch_no__iexact=batch,
+                        is_deleted=False
+                    ).first()
+                
+                if not stock and not batch:
+                    # Fallback to name only if batch is not provided (should be avoided in UI)
+                    stock = PharmacyStock.objects.select_for_update().filter(
+                        name__iexact=name,
+                        is_deleted=False
+                    ).order_by('expiry_date').first()
                 
                 if stock:
+                    if stock.qty_available < delta:
+                        raise serializers.ValidationError({
+                            "error": f"Insufficient stock for {name} (Batch: {batch or 'Any'}). Available: {stock.qty_available}, Requested: {delta}"
+                        })
+                        
                     # Perform stock adjustment
                     stock.qty_available -= delta
-                    if stock.qty_available < 0:
-                        stock.qty_available = 0
                     stock.save()
                     
                     # Update item tracking
                     item.deducted_qty = current_qty
                     item.stock_deducted = True
                     item.save()
+                else:
+                    # If it's a new manual entry and no stock found, we should probably warn or block
+                    # unless it's a non-pharmacy item mislabeled as dept='PHARMACY'
+                    if delta > 0:
+                         raise serializers.ValidationError({
+                            "error": f"No stock record found for {name} (Batch: {batch or 'N/A'})."
+                        })
 
     @action(detail=True, methods=['post'])
     def add_payment(self, request, pk=None):
